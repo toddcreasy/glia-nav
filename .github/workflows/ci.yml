@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+
+# Cancel a superseded run when new commits land on the same PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ROLE_ARN: arn:aws:iam::570643734415:role/glia-nav-github-actions
+  # OpsStack subscribes this address to budget and alarm alerts. A secret, not a variable:
+  # the repo is public, and Actions logs print variables.
+  ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # Unit tests only. The evals hit Bedrock and cost tokens, so they run on merge.
+      - run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # LayoutProps and friends are generated, not hand-written. A clean checkout
+      # has no .next/types, so tsc fails until they exist.
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npm run build
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm install -g aws-cdk
+      # The agent image is arm64; the runner is amd64.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: uv sync --locked
+      - name: cdk diff
+        working-directory: infra
+        run: cdk diff --all

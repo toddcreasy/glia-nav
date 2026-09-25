@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# Node
+node_modules/
+.next/
+frontend/out/
+frontend/.env.local
+npm-debug.log*
+
+# CDK
+cdk.out/
+.cdk.staging/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# CDK
+infra/cdk.out/
+
+# Local working list
+TODO.md

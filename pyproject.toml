@@ -1,0 +1,61 @@
+[project]
+name = "glia-nav"
+version = "0.1.0"
+description = "An LLM-assisted navigator for glioblastoma clinical trials and research literature. Research use only; not medical advice."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.16",
+    "boto3>=1.40",
+    "defusedxml>=0.7",
+    "fastapi[standard]>=0.120",
+    "httpx>=0.28",
+    "pydantic-settings>=2.12",
+    "pyjwt[crypto]>=2.13",
+    "sqlalchemy>=2.0",
+    "sqlalchemy-aurora-data-api==0.5.0",
+]
+
+[dependency-groups]
+agent = [
+    "aws-opentelemetry-distro>=0.19",
+    "bedrock-agentcore>=1.22",
+    "strands-agents>=1.53",
+]
+dev = [
+    "ruff>=0.14",
+    "pytest>=8.4",
+    "pre-commit>=4.4",
+    "pydantic-evals>=1.0",
+]
+infra = [
+    "aws-cdk-lib>=2.220",
+    "constructs>=10.4",
+]
+
+[tool.uv]
+default-groups = ["agent", "dev", "infra"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = "glia_nav"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "infra", "evals", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["evals: hits Bedrock and costs tokens; excluded from the default run"]

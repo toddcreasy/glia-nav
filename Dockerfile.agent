@@ -1,0 +1,29 @@
+# AgentCore Runtime containers must be ARM64; x86 images do not start.
+FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+RUN uv sync --locked --no-default-groups --group agent --no-editable
+
+FROM --platform=linux/arm64 python:3.14-slim-bookworm
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
+
+WORKDIR /app
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+USER app
+# AgentCore routes to this port internally over its own network. Not internet-facing.
+EXPOSE 8080
+
+# ADOT auto-instruments Strands, Bedrock, and the MCP client, and AgentCore Runtime
+# supplies the OTEL exporter environment itself.
+CMD ["opentelemetry-instrument", "python", "-m", "glia_nav.agents.server"]

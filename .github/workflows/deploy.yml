@@ -1,0 +1,141 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    # A docs-only merge changes nothing that runs, so skip a ~10 minute deploy
+    # and a golden-set run that costs real Bedrock tokens. A commit touching
+    # both docs and code still deploys: the filter only skips when every
+    # changed path matches.
+    #
+    # ci.yml deliberately carries no such filter. Its three jobs are required
+    # status checks on main, and a filtered-out check never reports at all,
+    # which would leave a docs-only PR unmergeable with no way to override.
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.claude/**'
+  # Escape hatch: deploy a change the filter skipped, without an empty commit.
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one midway: a killed `cdk deploy` leaves
+# CloudFormation mid-update.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ROLE_ARN: arn:aws:iam::570643734415:role/glia-nav-github-actions
+  # OpsStack subscribes this address to budget and alarm alerts. A secret, not a variable:
+  # the repo is public, and Actions logs print variables.
+  ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install -g aws-cdk
+      # The agent image is arm64; the runner is amd64.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+
+      - name: Read stack outputs
+        id: outputs
+        run: |
+          out() {
+            aws cloudformation describe-stacks --stack-name "$1" \
+              --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text
+          }
+          {
+            echo "gateway_url=$(out AgentStack GatewayUrl)"
+            echo "guardrail_id=$(out AgentStack GuardrailId)"
+            # Missing until the first deploy that exports it; the CLI prints "None" then.
+            version="$(out AgentStack GuardrailVersion)"
+            echo "guardrail_version=${version/#None/}"
+            echo "amplify_app_id=$(out FrontendStack AmplifyAppId)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Golden set against the deployed Gateway and with the deployed guardrail, before
+      # anything ships. Without a version the agent runs unguarded, as it did before.
+      - name: Evals
+        env:
+          GATEWAY_URL: ${{ steps.outputs.outputs.gateway_url }}
+          GUARDRAIL_ID: ${{ steps.outputs.outputs.guardrail_version && steps.outputs.outputs.guardrail_id || '' }}
+          GUARDRAIL_VERSION: ${{ steps.outputs.outputs.guardrail_version }}
+        run: uv run pytest evals
+
+      - name: Deploy infrastructure
+        working-directory: infra
+        run: cdk deploy --all --require-approval never
+
+      # Stack outputs can change during the deploy, so re-read before building.
+      - name: Re-read stack outputs
+        id: deployed
+        run: |
+          out() {
+            aws cloudformation describe-stacks --stack-name "$1" \
+              --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text
+          }
+          {
+            echo "service_url=$(out BackendStack ServiceUrl)"
+            echo "amplify_app_id=$(out FrontendStack AmplifyAppId)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_CHAT_API_URL: ${{ steps.deployed.outputs.service_url }}
+        run: |
+          npm ci
+          npm run build
+          (cd out && zip -qr ../frontend.zip .)
+
+      # The Amplify app has no repository attached, so nothing auto-builds on push.
+      # See FrontendStack for why.
+      - name: Deploy frontend
+        working-directory: frontend
+        env:
+          APP_ID: ${{ steps.deployed.outputs.amplify_app_id }}
+        run: |
+          read -r JOB_ID UPLOAD_URL < <(
+            aws amplify create-deployment --app-id "$APP_ID" --branch-name main \
+              --query '[jobId,zipUploadUrl]' --output text
+          )
+          curl --fail --silent --show-error -X PUT -T frontend.zip "$UPLOAD_URL"
+          aws amplify start-deployment --app-id "$APP_ID" --branch-name main --job-id "$JOB_ID"
+
+          for _ in $(seq 1 60); do
+            status=$(aws amplify get-job --app-id "$APP_ID" --branch-name main \
+              --job-id "$JOB_ID" --query 'job.summary.status' --output text)
+            echo "amplify job $JOB_ID: $status"
+            case "$status" in
+              SUCCEED) exit 0 ;;
+              FAILED|CANCELLED) exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "timed out waiting for amplify job $JOB_ID"
+          exit 1

@@ -1,0 +1,14 @@
+.env
+.git
+.github
+.venv
+.ruff_cache
+.pytest_cache
+**/__pycache__
+cdk.out
+infra/cdk.out
+frontend
+docs
+evals
+tests
+scripts

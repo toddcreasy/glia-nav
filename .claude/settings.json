@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws sso-admin:*)",
+      "Bash(cdk deploy:*)",
+      "Bash(cdk diff:*)",
+      "Bash(cdk synth:*)",
+      "Bash(cdk bootstrap:*)",
+      "Bash(gh pr merge * --squash)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *--admin*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "out=$(aws sts get-caller-identity --query Arn --output text --profile default 2>/dev/null) && printf \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"AWS identity: %s\\\"}}\" \"$out\" || printf \"{\\\"systemMessage\\\":\\\"AWS credentials expired or missing. Run: aws sso login --profile default\\\"}\"",
+            "timeout": 15,
+            "statusMessage": "Checking AWS credentials"
+          }
+        ]
+      }
+    ]
+  }
+}
