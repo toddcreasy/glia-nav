@@ -14,6 +14,8 @@ on:
     paths-ignore:
       - '**.md'
       - 'LICENSE'
+      # Served by GitHub Pages from main, not by any stack.
+      - 'docs/**'
       - '.claude/**'
   # Escape hatch: deploy a change the filter skipped, without an empty commit.
   workflow_dispatch:
