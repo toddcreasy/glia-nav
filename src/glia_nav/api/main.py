@@ -435,8 +435,14 @@ def sse(event: dict) -> str:
 
 
 def runtime_events(body) -> Iterator[dict]:
-    """The runtime's server-sent events, each a JSON object on one data: line."""
-    for line in body.iter_lines():
+    """The runtime's server-sent events, each a JSON object on one data: line.
+
+    Read a byte at a time: iter_lines' default 1024-byte chunks wait for a full kilobyte,
+    so a turn's short progress lines arrived together with the answer. Measured against
+    the deployed runtime on 2026-09-25: all three events at 6.3 s at 1024, the first at
+    3.1 s at 1. A turn is a few kilobytes, so the extra reads cost nothing that matters.
+    """
+    for line in body.iter_lines(chunk_size=1):
         if line.startswith(b"data:"):
             yield json.loads(line[5:])
 
