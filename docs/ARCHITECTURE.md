@@ -350,8 +350,10 @@ cites outside the results. A rewrite costs a second model call on that turn. An 
 results can still be cited for a claim the paper does not make; nothing checks that.
 
 **Prompt caching does nothing yet.** Cache points are placed correctly, but the prefix is under the
-4,096 token minimum Haiku 4.5 needs before it stores anything, so the counters read zero. This
-resolves itself as the system prompt and tool set grow.
+4,096-token minimum Opus 4.6 needs before it stores anything (the same as Haiku 4.5), so the counters
+read zero: 0 cache reads and 0 writes across the Opus turns on 2026-09-25. This resolves itself as
+the system prompt and tool set grow. Newer models cache shorter prefixes (1,024 tokens on Opus 4.8,
+512 on Opus 5), but this account cannot invoke them.
 
 **Coverage has small holes.** The backfill loaded 62,077 papers against PubMed's 62,177 on
 2026-09-23: three carry 2027 publication dates that no year slice covered, and the rest most likely

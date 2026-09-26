@@ -151,7 +151,7 @@ uv run python scripts/agent_smoke.py "Is the database up?"
 
 Every run logs one `agent run` line carrying the model, token counts, cache hits, cycles, the tools
 it called, and latency. Cache points sit after the system prompt and after the tool definitions, but
-the prefix is still short of the 4,096 tokens Haiku 4.5 needs before it stores anything, so the
+the prefix is still short of the 4,096 tokens Opus 4.6 needs before it stores anything, so the
 cache counters read zero until the prompt grows.
 
 ## Run the frontend
