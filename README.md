@@ -2,6 +2,11 @@
 
 **Live demo: https://main.d1zp4oaz4g1yvk.amplifyapp.com**
 
+<img src="docs/images/navigator-chat.png" alt="The glia-nav chat tab answering a question about a patient with recurrent, MGMT-unmethylated glioblastoma who has had bevacizumab, with a numbered list of recruiting trials and linked NCT IDs" width="720">
+
+*Asking the navigator about a patient. Every NCT ID links to ClinicalTrials.gov and came from that
+answer's own search results.*
+
 ## Why I built this
 
 A close family member was recently diagnosed with glioblastoma. Within days, the rest of us were
