@@ -339,12 +339,15 @@ mistaken for a production posture.
 
 **Security has open items.** S3 and Aurora use AWS-managed keys rather than customer-managed ones. There is no GuardDuty or Security Hub in the account.
 
-**Citation provenance is checked in evals and logged in production, not enforced.** `run_agent`
+**Citations are held to the search results, but not to what the papers say.** `run_agent`
 collects every NCT ID, PMID, and DOI in the conversation's tool results and user messages
-(`source_ids`). The golden set's `CitesOnlySources` fails any case whose answer cites an ID outside
-that set. In production the runtime logs `unsourced_ids` on each `agent run` line, but the answer
-still reaches the user unchanged. An ID from the search results can also be cited for a claim the
-paper does not make; nothing checks that.
+(`source_ids`). An answer that cites anything else is sent back once, in the same conversation, to
+be rewritten from the results; if the rewrite still does, the lines naming those IDs are dropped.
+Opus 4.6 needed this: asked about a patient on 2026-09-25, it listed two trials from its own memory.
+The `agent run` log line records `unsourced_ids` before the rewrite, `rewritten`, and
+`unsourced_dropped`, and the golden set's `CitesOnlySources` fails any case whose final answer
+cites outside the results. A rewrite costs a second model call on that turn. An ID from the search
+results can still be cited for a claim the paper does not make; nothing checks that.
 
 **Prompt caching does nothing yet.** Cache points are placed correctly, but the prefix is under the
 4,096 token minimum Haiku 4.5 needs before it stores anything, so the counters read zero. This

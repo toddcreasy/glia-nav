@@ -219,6 +219,21 @@ CASES = [
         ),
     ),
     Case(
+        # Asked on the live site on 2026-09-25, Opus 4.6 listed two trials from its own
+        # memory, one not a glioblastoma trial in the index. run_agent now has such an
+        # answer rewritten from the results; this case holds it to that.
+        name="patient_question_cites_only_results",
+        inputs=(
+            "My mom has recurrent glioblastoma, MGMT unmethylated, and has already had "
+            "bevacizumab. Which recruiting trials could she look into?"
+        ),
+        metadata=Expected(
+            used_tool=True,
+            cites=True,
+            filters=(("mgmt", "unmethylated"), ("prior_bevacizumab", True)),
+        ),
+    ),
+    Case(
         name="filters_newly_diagnosed_patient",
         inputs=(
             "Which trials could a newly diagnosed IDH-wildtype, MGMT-methylated "
