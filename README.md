@@ -57,22 +57,10 @@ are built. The known gaps are listed in [`docs/ARCHITECTURE.md`](docs/ARCHITECTU
 
 ## How it fits together
 
-```
-Browser ─────────── public demo, no sign-in
-  │
-  ▼
-Amplify Hosting ── static Next.js export
-  │  /api/* rewritten same-origin
-  ▼
-App Runner ────── FastAPI, /search and /chat take no token
-  │  RDS Data API over HTTPS, IAM auth
-  ▼
-Aurora Serverless v2 (PostgreSQL 17 + pgvector), isolated subnets, no NAT
+<img src="docs/architecture.svg" alt="glia-nav on AWS: the web path, the agent path, and the daily ingest meet at one Aurora database reached over the RDS Data API. Below them, CloudWatch, X-Ray Transaction Search, AgentCore Evaluations, SNS, Budgets, and the GitHub Actions to CDK deploy path." width="100%">
 
-AgentCore Runtime ── Strands agent, ARM64 container
-  ├── Bedrock (Opus 4.6) with a Guardrail applied on input and output
-  └── AgentCore Gateway ── the backend's endpoints published as MCP tools
-```
+Download [the SVG](docs/architecture.svg) and open it in a browser for a note on each box and links
+to its AWS documentation. GitHub shows it as a plain image, without either.
 
 ## AWS services
 
