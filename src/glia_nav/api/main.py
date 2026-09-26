@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 from datetime import time as clock_time
 from functools import lru_cache
@@ -17,7 +18,7 @@ from botocore.exceptions import ClientError
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi import status as http_status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
@@ -429,13 +430,29 @@ def usage_today(settings: Annotated[Settings, Depends(get_settings)]) -> Usage:
     return usage(used, settings)
 
 
+def sse(event: dict) -> str:
+    return f"data: {json.dumps(event, default=str)}\n\n"
+
+
+def runtime_events(body) -> Iterator[dict]:
+    """The runtime's server-sent events, each a JSON object on one data: line."""
+    for line in body.iter_lines():
+        if line.startswith(b"data:"):
+            yield json.loads(line[5:])
+
+
 @app.post("/chat")
 def chat(
     request: ChatRequest,
     http_request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> ChatReply:
+) -> StreamingResponse:
     """One turn of a conversation with the navigator agent. Public: no sign-in.
+
+    The limits are checked before anything streams, so they answer 429 as ordinary errors.
+    The turn then streams as server-sent events: {"type": "progress", "text"} lines while
+    the agent works, and a last event that is either {"type": "answer", ...ChatReply} or
+    {"type": "error", "detail"}.
 
     The runtime keeps each session's history in its own microVM, so a conversation is a
     session, named by the random UUID the browser generated for it.
@@ -465,29 +482,48 @@ def chat(
             runtimeSessionId=session,
             payload=json.dumps({"prompt": request.message}).encode(),
         )
-        body = json.loads(response["response"].read())
     except ClientError as exc:
         code = exc.response["Error"]["Code"]
         logger.warning("chat failed", extra={"error_code": code})
         raise HTTPException(http_status.HTTP_502_BAD_GATEWAY, "the agent is unavailable") from exc
-    if "error" in body:
-        logger.warning("chat rejected by agent", extra={"agent_error": body["error"]})
-        raise HTTPException(http_status.HTTP_502_BAD_GATEWAY, "the agent could not answer")
 
-    tokens = body.get("tokens", 0)
-    try:
-        hybrid.run(rds, settings, RECORD_TURN, {"tokens": tokens})
-    except ClientError as exc:
-        # The answer is already paid for; losing the count is better than losing it.
-        logger.warning(
-            "chat usage record failed", extra={"error_code": exc.response["Error"]["Code"]}
-        )
+    def stream() -> Iterator[str]:
+        try:
+            for event in runtime_events(response["response"]):
+                if event.get("type") == "progress":
+                    yield sse(event)
+                    continue
+                if event.get("type") != "reply":
+                    # The agent's own error event, or the SDK's when the turn raised.
+                    logger.warning(
+                        "chat rejected by agent", extra={"agent_error": event.get("error")}
+                    )
+                    yield sse({"type": "error", "detail": "the agent could not answer"})
+                    return
+                tokens = event.get("tokens", 0)
+                try:
+                    hybrid.run(rds, settings, RECORD_TURN, {"tokens": tokens})
+                except ClientError as exc:
+                    # The answer is already paid for; losing the count is better than losing it.
+                    logger.warning(
+                        "chat usage record failed",
+                        extra={"error_code": exc.response["Error"]["Code"]},
+                    )
+                # The message and answer are not logged: they can describe someone's diagnosis.
+                logger.info("chat", extra={"used_tool": event["used_tool"], "tokens": tokens})
+                reply = ChatReply(
+                    answer=event["answer"],
+                    used_tool=event["used_tool"],
+                    conversation_id=request.conversation_id,
+                    usage=usage(used + tokens, settings),
+                )
+                yield sse({"type": "answer", **reply.model_dump(mode="json")})
+                return
+            yield sse({"type": "error", "detail": "the agent stopped without answering"})
+        except (ClientError, ValueError) as exc:
+            logger.warning("chat stream failed", extra={"error": type(exc).__name__})
+            yield sse({"type": "error", "detail": "the agent could not answer"})
 
-    # The message and answer are not logged: they can describe someone's diagnosis.
-    logger.info("chat", extra={"used_tool": body["used_tool"], "tokens": tokens})
-    return ChatReply(
-        answer=body["answer"],
-        used_tool=body["used_tool"],
-        conversation_id=request.conversation_id,
-        usage=usage(used + tokens, settings),
+    return StreamingResponse(
+        stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"}
     )

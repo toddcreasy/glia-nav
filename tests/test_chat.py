@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from botocore.exceptions import ClientError
+from botocore.response import StreamingBody
 from fastapi.testclient import TestClient
 
 from glia_nav.api import main
@@ -12,13 +13,15 @@ from glia_nav.api import main
 client = TestClient(main.app)
 
 
+REPLY = {"type": "reply", "answer": "NCT00916409", "used_tool": True, "tokens": 7000}
+SEARCHING = {"type": "progress", "text": 'Searching trials for "EF-14"'}
+
+
 class FakeRuntime:
-    def __init__(self, body=None, error=None):
-        self.body = (
-            body
-            if body is not None
-            else {"answer": "NCT00916409", "used_tool": True, "tokens": 7000}
-        )
+    """AgentCore Runtime streaming a turn as server-sent events, as the SDK does."""
+
+    def __init__(self, events=None, error=None):
+        self.events = events if events is not None else [SEARCHING, REPLY]
         self.error = error
         self.calls = []
 
@@ -26,7 +29,15 @@ class FakeRuntime:
         self.calls.append(kwargs)
         if self.error:
             raise self.error
-        return {"response": io.BytesIO(json.dumps(self.body).encode())}
+        raw = "".join(f"data: {json.dumps(e)}\n\n" for e in self.events).encode()
+        return {
+            "response": StreamingBody(io.BytesIO(raw), len(raw)),
+            "contentType": "text/event-stream",
+        }
+
+
+def events(response) -> list[dict]:
+    return [json.loads(line[5:]) for line in response.text.splitlines() if line.startswith("data:")]
 
 
 class FakeRds:
@@ -71,9 +82,14 @@ def chat(address="203.0.113.7"):
     return client.post("/chat", json=body, headers={"X-Forwarded-For": address})
 
 
-def test_chat_needs_no_sign_in_and_records_its_tokens(runtime, rds):
+def test_chat_streams_progress_then_the_answer_and_records_tokens(runtime, rds):
     response = chat()
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    streamed = events(response)
+    assert streamed[0] == SEARCHING
+    assert streamed[-1]["type"] == "answer"
+    assert streamed[-1]["answer"] == "NCT00916409"
     assert rds.recorded == [7000]
 
 
@@ -105,7 +121,7 @@ def test_session_is_named_by_the_conversation(runtime):
         "/chat", json={"message": "Which trial is EF-14?", "conversation_id": str(conversation)}
     )
     assert response.status_code == 200
-    reply = response.json()
+    reply = events(response)[-1]
     assert reply["answer"] == "NCT00916409"
     assert reply["used_tool"] is True
     assert reply["conversation_id"] == str(conversation)
@@ -131,10 +147,17 @@ def test_runtime_failure_is_a_502(runtime):
     assert client.post("/chat", json=body).status_code == 502
 
 
-def test_agent_error_body_is_a_502(runtime):
-    runtime.body = {"error": "payload must be an object with a 'prompt' string"}
-    body = {"message": "hi", "conversation_id": str(uuid4())}
-    assert client.post("/chat", json=body).status_code == 502
+def test_agent_error_ends_the_stream_with_an_error_event(runtime, rds):
+    # The SDK's own event when a turn raises carries "error" and no type.
+    runtime.events = [SEARCHING, {"error": "boom", "error_type": "RuntimeError"}]
+    streamed = events(chat())
+    assert streamed[-1] == {"type": "error", "detail": "the agent could not answer"}
+    assert rds.recorded == []
+
+
+def test_stream_that_ends_without_a_reply_says_so(runtime):
+    runtime.events = [SEARCHING]
+    assert events(chat())[-1]["type"] == "error"
 
 
 def test_chat_waits_for_a_resuming_database(runtime, rds, monkeypatch):
@@ -195,6 +218,6 @@ def test_usage_reports_what_is_left(rds):
 
 def test_chat_reply_carries_usage_after_the_turn(runtime, rds):
     rds.tokens_today = 1_000
-    usage = chat().json()["usage"]
+    usage = events(chat())[-1]["usage"]
     assert usage["used"] == 8_000
     assert usage["remaining"] == usage["limit"] - 8_000

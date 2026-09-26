@@ -212,6 +212,16 @@ own microVM, so follow-up questions work without the API storing anything. The s
 `public-` plus the conversation id the browser generates, so nobody can reach another visitor's
 conversation without guessing their UUID. NCT IDs and PMIDs in answers become links.
 
+**A turn streams its progress, not its answer.** The runtime's entry point is a generator, so the
+AgentCore SDK sends server-sent events, and `/chat` relays them: a line for each step while the agent
+works ("Searching recruiting trials for ...: recurrent, MGMT unmethylated", "Found 15 trials and 0
+papers", "Rewriting the answer to cite only the search results"), then the answer. Strands tool
+hooks produce the lines, and `run_agent` passes each turn's sink through `invocation_state`. The
+answer itself arrives whole, because it is checked for unsourced citations, and rewritten if needed,
+after the model finishes; streaming its words would show a draft that may be replaced. The limits
+are checked before anything streams, so they still answer 429. A local run on 2026-09-25 took 70 s
+with its first line at 4 s.
+
 Before invoking the agent, `/chat` waits out an auto-paused cluster (up to a minute). Otherwise
 the agent's first search after an idle spell gets the 503 and tells the user to try again. The API
 cannot reference the runtime directly, because `AgentStack` already depends on `BackendStack`, so
@@ -227,7 +237,7 @@ Amplify's `/api/*` rewrite proxy cuts a request off at 30 s, with no setting to 
 turn can take 40 s, and longer while Aurora wakes, so on 2026-09-24 a 41.8 s answer reached the
 browser as a 504 after the API had returned it. Chat therefore calls the App Runner URL
 (`NEXT_PUBLIC_CHAT_API_URL`, from CI) directly, under App Runner's 120 s limit. The API's CORS
-middleware allows one origin, POST, and the `Authorization` and `Content-Type` headers.
+middleware allows one origin, GET and POST, and the `Authorization` and `Content-Type` headers.
 `FrontendStack` publishes that origin to SSM `/glia-nav/frontend-origin`, because `BackendStack`
 cannot reference the stack that depends on it; the API reads it on first use. Search still goes
 through the rewrite.

@@ -65,6 +65,8 @@ function AgentText({ text }: { text: string }) {
 export default function Chat({ active }: { active: boolean }) {
   const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
   const [usage, setUsage] = useState<Usage | null>(null);
+  // What the agent is doing on the turn in flight, streamed from /chat.
+  const [steps, setSteps] = useState<string[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,6 +97,7 @@ export default function Chat({ active }: { active: boolean }) {
     setMessage("");
     setBusy(true);
     setError("");
+    setSteps([]);
 
     try {
       const response = await fetch(`${API_URL}/chat`, {
@@ -108,13 +111,38 @@ export default function Chat({ active }: { active: boolean }) {
         loadUsage();
         return;
       }
-      if (!response.ok) {
+      if (!response.ok || !response.body) {
         setError(`The navigator could not answer (${response.status}). Try again.`);
         return;
       }
-      const reply = await response.json();
-      setTurns((current) => [...current, { role: "agent", text: reply.answer }]);
-      setUsage(reply.usage);
+      // Server-sent events: progress lines while the agent works, then one answer or error.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+        for (const chunk of chunks) {
+          const data = chunk.split("\n").find((line) => line.startsWith("data:"));
+          if (!data) continue;
+          const streamed = JSON.parse(data.slice(5));
+          if (streamed.type === "progress") {
+            setSteps((current) => [...current, streamed.text]);
+          } else if (streamed.type === "answer") {
+            setTurns((current) => [...current, { role: "agent", text: streamed.answer }]);
+            setUsage(streamed.usage);
+            finished = true;
+          } else {
+            setError("The navigator could not answer. Try again.");
+            finished = true;
+          }
+        }
+      }
+      if (!finished) setError("The navigator stopped without answering. Try again.");
     } catch (err) {
       setError(`The navigator could not answer: ${String(err)}`);
     } finally {
@@ -178,10 +206,21 @@ export default function Chat({ active }: { active: boolean }) {
       </ol>
 
       {busy && (
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Thinking… The first message after a quiet spell can take up to a minute while the
-          database wakes.
-        </p>
+        <div className="space-y-1 text-sm text-black/60 dark:text-white/60">
+          <p>
+            Thinking… The first message after a quiet spell can take up to a minute while the
+            database wakes.
+          </p>
+          {steps.length > 0 && (
+            <ul className="space-y-1">
+              {steps.map((step, i) => (
+                <li key={i} className={i === steps.length - 1 ? "text-foreground" : undefined}>
+                  {step}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       {error && <p className="text-sm text-red-700 dark:text-red-400">{error}</p>}
 
