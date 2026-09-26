@@ -1,9 +1,10 @@
 import logging
+from collections.abc import Iterator
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from pydantic import BaseModel, ValidationError
 
-from glia_nav.agents.agent import build_agent, run_agent
+from glia_nav.agents.agent import build_agent, stream_agent
 from glia_nav.logging_config import configure_logging
 
 configure_logging()
@@ -18,14 +19,17 @@ class InvokeRequest(BaseModel):
 
 
 @app.entrypoint
-def invoke(payload: dict) -> dict:
+def invoke(payload: dict) -> Iterator[dict]:
+    """A generator, so the SDK streams each event to the caller as server-sent events:
+    progress lines while the turn runs, then the reply."""
     try:
         request = InvokeRequest.model_validate(payload)
     except ValidationError as exc:
         logger.warning("invalid payload", extra={"errors": exc.error_count()})
-        return {"error": "payload must be an object with a 'prompt' string"}
+        yield {"type": "error", "error": "payload must be an object with a 'prompt' string"}
+        return
 
-    return run_agent(request.prompt, agent=agent).model_dump()
+    yield from stream_agent(request.prompt, agent)
 
 
 if __name__ == "__main__":

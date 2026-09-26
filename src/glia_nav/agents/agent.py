@@ -1,7 +1,10 @@
+import json
 import logging
+import queue
 import re
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 
 import boto3
@@ -10,6 +13,7 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from pydantic import BaseModel, Field
 from strands import Agent, tool
+from strands.hooks import AfterToolCallEvent, BeforeToolCallEvent
 from strands.models.bedrock import BedrockModel
 from strands.tools.mcp import MCPClient
 
@@ -167,6 +171,89 @@ def current_time() -> str:
     return datetime.now(UTC).isoformat()
 
 
+# Called with a short line on what the agent is doing, for the chat page to show while a
+# turn runs. run_agent passes it through invocation_state, so each turn has its own.
+Progress = Callable[[str], None]
+
+SEARCH_TOOL = "search_trials_and_papers"
+
+
+def _flag(value) -> bool | None:
+    """A boolean tool argument, which the model may send as true or "true"."""
+    if value is None:
+        return None
+    return value is True or str(value).lower() == "true"
+
+
+def describe_search(params: dict) -> str:
+    """What a search call is looking for, e.g. 'Searching recruiting trials for
+    "glioblastoma": recurrent, recurrence 2, MGMT unmethylated, prior bevacizumab'."""
+    kind = {"trials": "trials", "papers": "papers"}.get(params.get("kind"), "trials and papers")
+    subject = f"recruiting {kind}" if _flag(params.get("recruiting")) else kind
+    details = []
+    if params.get("setting"):
+        details.append(str(params["setting"]).replace("_", " "))
+    if params.get("recurrence"):
+        details.append(f"recurrence {params['recurrence']}")
+    for key, name in (("idh", "IDH"), ("mgmt", "MGMT")):
+        if params.get(key):
+            details.append(f"{name} {params[key]}")
+    bevacizumab = _flag(params.get("prior_bevacizumab"))
+    if bevacizumab is not None:
+        details.append("prior bevacizumab" if bevacizumab else "no prior bevacizumab")
+    if params.get("kps") is not None:
+        details.append(f"KPS {params['kps']}")
+    if params.get("phase"):
+        details.append(str(params["phase"]).replace("_", " ").lower())
+    if params.get("age") is not None:
+        details.append(f"age {params['age']}")
+    place = ", ".join(str(params[k]) for k in ("city", "state", "country") if params.get(k))
+    if place:
+        details.append(f"in {place}")
+    if params.get("from_year"):
+        details.append(f"papers from {params['from_year']}")
+    line = f'Searching {subject} for "{params.get("q", "")}"'
+    return f"{line}: {', '.join(details)}" if details else line
+
+
+def describe_results(result: dict) -> str | None:
+    """'Found 10 trials and 3 papers' from a search result, or None if it is not one."""
+    for item in result.get("content", []):
+        try:
+            body = json.loads(item.get("text", ""))
+        except ValueError:
+            continue
+        if isinstance(body, dict) and ("trials" in body or "papers" in body):
+            counts = [(len(body.get(k, [])), k[:-1]) for k in ("trials", "papers")]
+            return "Found " + " and ".join(
+                f"{n} {word}{'' if n == 1 else 's'}" for n, word in counts
+            )
+    return None
+
+
+def _report_tool_start(event: BeforeToolCallEvent) -> None:
+    report = event.invocation_state.get("on_progress")
+    name = event.tool_use["name"]
+    if report is None:
+        return
+    if name.endswith(SEARCH_TOOL):
+        report(describe_search(event.tool_use.get("input") or {}))
+    elif name.endswith("check_database_health"):
+        report("Checking the database")
+    elif name == "current_time":
+        report("Checking the date")
+
+
+def _report_tool_result(event: AfterToolCallEvent) -> None:
+    report = event.invocation_state.get("on_progress")
+    if report is None or not event.tool_use["name"].endswith(SEARCH_TOOL):
+        return
+    # A paused database answers the first search after a quiet spell with an error, and
+    # the agent searches again; without a line here the page shows the same search twice.
+    line = describe_results(event.result)
+    report(line or "The search didn't answer, trying again")
+
+
 def build_agent(settings: AgentSettings | None = None) -> Agent:
     settings = settings or get_agent_settings()
     gateway = MCPClient(url=settings.gateway_url, auth_provider=GatewaySigV4(settings.aws_region))
@@ -191,7 +278,7 @@ def build_agent(settings: AgentSettings | None = None) -> Agent:
         cache_tools="default",
         **guardrail,
     )
-    return Agent(
+    agent = Agent(
         model=model,
         # The cache point caches everything before it: the system prompt.
         system_prompt=[{"text": SYSTEM_PROMPT}, {"cachePoint": {"type": "default"}}],
@@ -200,6 +287,9 @@ def build_agent(settings: AgentSettings | None = None) -> Agent:
         # Default handler prints the stream to stdout, which would break JSON logging.
         callback_handler=None,
     )
+    agent.hooks.add_callback(BeforeToolCallEvent, _report_tool_start)
+    agent.hooks.add_callback(AfterToolCallEvent, _report_tool_result)
+    return agent
 
 
 def _tool_call_counts(agent: Agent) -> dict[str, int]:
@@ -244,24 +334,30 @@ def drop_unsourced(answer: str, unsourced: set[str]) -> str:
     return "\n".join(kept).strip()
 
 
-def run_agent(prompt: str, agent: Agent | None = None) -> AgentReply:
+def run_agent(
+    prompt: str, agent: Agent | None = None, on_progress: Progress | None = None
+) -> AgentReply:
     """Run one turn and log the token usage that turn cost.
 
     An answer that cites an NCT ID, PMID, or DOI the conversation never showed the model
     is sent back once to be rewritten from the results; Opus 4.6 added trials from its
     own memory on patient questions. If the rewrite still does, those lines are dropped.
+    on_progress, if given, hears what the turn is doing while it runs.
     """
     agent = agent or build_agent()
     before = _tool_call_counts(agent)
     turn_start = len(agent.messages)
     started = time.monotonic()
-    results = [agent(prompt)]
+    state = {"on_progress": on_progress} if on_progress else None
+    results = [agent(prompt, invocation_state=state)]
     answer = _answer(results[0])
     sources = source_ids(agent.messages)
     first_unsourced = cited_ids(answer) - sources
     unsourced = first_unsourced
     if unsourced:
-        results.append(agent(rewrite_request(unsourced)))
+        if on_progress:
+            on_progress("Rewriting the answer to cite only the search results")
+        results.append(agent(rewrite_request(unsourced), invocation_state=state))
         answer = _answer(results[-1])
         sources = source_ids(agent.messages)
         unsourced = cited_ids(answer) - sources
@@ -308,3 +404,32 @@ def run_agent(prompt: str, agent: Agent | None = None) -> AgentReply:
         tool_calls=tool_calls(agent.messages[turn_start:]),
         tokens=sum(usage.values()),
     )
+
+
+def stream_agent(prompt: str, agent: Agent) -> Iterator[dict]:
+    """One turn as events: {"type": "progress", "text": ...} while it runs, then
+    {"type": "reply", ...} with the AgentReply fields, or {"type": "error"} if it raised.
+
+    The turn runs on a daemon thread and hands its progress lines through a queue, so each
+    one is yielded as it happens rather than after the answer.
+    """
+    events: queue.Queue = queue.Queue()
+
+    def turn() -> None:
+        try:
+            reply = run_agent(
+                prompt,
+                agent=agent,
+                on_progress=lambda text: events.put({"type": "progress", "text": text}),
+            )
+            events.put({"type": "reply", **reply.model_dump()})
+        except Exception:
+            logger.exception("agent turn failed")
+            events.put({"type": "error", "error": "the agent could not answer"})
+
+    threading.Thread(target=turn, daemon=True).start()
+    while True:
+        event = events.get()
+        yield event
+        if event["type"] != "progress":
+            return

@@ -9,6 +9,7 @@ from glia_nav.agents.agent import (
     rewrite_request,
     run_agent,
     source_ids,
+    stream_agent,
     tool_calls,
 )
 
@@ -104,11 +105,13 @@ class FakeAgent:
         self.tool_payload = tool_payload
         self.messages = []
         self.prompts = []
+        self.states = []
         self.event_loop_metrics = SimpleNamespace(tool_metrics={})
         self.model = SimpleNamespace(get_config=lambda: {"model_id": "fake"})
 
-    def __call__(self, prompt):
+    def __call__(self, prompt, invocation_state=None):
         self.prompts.append(prompt)
+        self.states.append(invocation_state)
         self.messages.append({"role": "user", "content": [{"text": prompt}]})
         self.messages.append(tool_result(self.tool_payload))
         invocation = SimpleNamespace(
@@ -155,3 +158,31 @@ def test_drop_unsourced_keeps_other_lines():
     assert drop_unsourced(answer, {"NCT99999999"}) == (
         "Intro.\n1. NCT00916409 EF-14\nAsk your team."
     )
+
+
+def test_progress_reaches_every_call_and_names_the_rewrite():
+    heard = []
+    agent = FakeAgent(["1. NCT00916409\n2. NCT99999999", "1. NCT00916409"], SEARCH)
+    run_agent("Trials for recurrent GBM?", agent=agent, on_progress=heard.append)
+    assert all(state["on_progress"] == heard.append for state in agent.states)
+    assert heard == ["Rewriting the answer to cite only the search results"]
+
+
+def test_stream_agent_yields_progress_then_the_reply():
+    agent = FakeAgent(["1. NCT00916409\n2. NCT99999999", "1. NCT00916409"], SEARCH)
+    events = list(stream_agent("Trials for recurrent GBM?", agent))
+    assert events[0] == {
+        "type": "progress",
+        "text": "Rewriting the answer to cite only the search results",
+    }
+    assert events[-1]["type"] == "reply"
+    assert events[-1]["answer"] == "1. NCT00916409"
+
+
+def test_stream_agent_reports_a_failed_turn():
+    class Broken(FakeAgent):
+        def __call__(self, prompt, invocation_state=None):
+            raise RuntimeError("bedrock down")
+
+    events = list(stream_agent("hi", Broken([], SEARCH)))
+    assert events == [{"type": "error", "error": "the agent could not answer"}]
