@@ -57,10 +57,11 @@ are built. The known gaps are listed in [`docs/ARCHITECTURE.md`](docs/ARCHITECTU
 
 ## How it fits together
 
-<img src="docs/architecture.svg" alt="glia-nav on AWS: the web path, the agent path, and the daily ingest meet at one Aurora database reached over the RDS Data API. Below them, CloudWatch, X-Ray Transaction Search, AgentCore Evaluations, SNS, Budgets, and the GitHub Actions to CDK deploy path." width="100%">
+<a href="https://toddcreasy.github.io/glia-nav/architecture.svg"><img src="docs/architecture.svg" alt="glia-nav on AWS: the web path, the agent path, and the daily ingest meet at one Aurora database reached over the RDS Data API. Below them, CloudWatch, X-Ray Transaction Search, AgentCore Evaluations, SNS, Budgets, and the GitHub Actions to CDK deploy path." width="100%"></a>
 
-Download [the SVG](docs/architecture.svg) and open it in a browser for a note on each box and links
-to its AWS documentation. GitHub shows it as a plain image, without either.
+Click the diagram for [the interactive version](https://toddcreasy.github.io/glia-nav/architecture.svg):
+hover a box for what it does and why, and click it for its AWS documentation. GitHub shows the
+diagram above as a plain image.
 
 ## AWS services
 
