@@ -1,6 +1,16 @@
 import json
+from types import SimpleNamespace
 
-from glia_nav.agents.agent import AgentAnswer, cited_ids, source_ids, tool_calls
+from glia_nav.agents.agent import (
+    REWRITE_PREFIX,
+    AgentAnswer,
+    cited_ids,
+    drop_unsourced,
+    rewrite_request,
+    run_agent,
+    source_ids,
+    tool_calls,
+)
 
 
 def tool_result(payload: dict) -> dict:
@@ -83,3 +93,65 @@ def test_tool_calls_keep_arguments_and_skip_structured_output():
     calls = tool_calls(messages)
     assert [c.name for c in calls] == ["glia-nav-backend___search_trials_and_papers"]
     assert calls[0].input["mgmt"] == "unmethylated"
+
+
+class FakeAgent:
+    """Scripted stand-in for a Strands Agent: each call appends the prompt and a tool
+    result to the conversation and returns the next scripted answer."""
+
+    def __init__(self, answers, tool_payload):
+        self.answers = list(answers)
+        self.tool_payload = tool_payload
+        self.messages = []
+        self.prompts = []
+        self.event_loop_metrics = SimpleNamespace(tool_metrics={})
+        self.model = SimpleNamespace(get_config=lambda: {"model_id": "fake"})
+
+    def __call__(self, prompt):
+        self.prompts.append(prompt)
+        self.messages.append({"role": "user", "content": [{"text": prompt}]})
+        self.messages.append(tool_result(self.tool_payload))
+        invocation = SimpleNamespace(
+            usage={"inputTokens": 100, "outputTokens": 10}, cycles=[object()]
+        )
+        return SimpleNamespace(
+            structured_output=AgentAnswer(answer=self.answers.pop(0)),
+            metrics=SimpleNamespace(agent_invocations=[invocation]),
+            stop_reason="end_turn",
+        )
+
+
+def test_sourced_answer_is_not_rewritten():
+    agent = FakeAgent(["See NCT00916409."], SEARCH)
+    reply = run_agent("Which trial is EF-14?", agent=agent)
+    assert reply.answer == "See NCT00916409."
+    assert len(agent.prompts) == 1
+    assert reply.tokens == 110
+
+
+def test_unsourced_answer_is_rewritten_from_the_results():
+    agent = FakeAgent(["1. NCT00916409\n2. NCT99999999"], SEARCH)
+    agent.answers.append("1. NCT00916409")
+    reply = run_agent("Trials for recurrent GBM?", agent=agent)
+    assert reply.answer == "1. NCT00916409"
+    assert agent.prompts[1].startswith(REWRITE_PREFIX)
+    assert "NCT99999999" in agent.prompts[1]
+    assert reply.tokens == 220
+
+
+def test_rewrite_that_still_cites_outside_the_results_loses_those_lines():
+    agent = FakeAgent(["1. NCT00916409\n2. NCT99999999", "1. NCT00916409\n2. NCT99999999"], SEARCH)
+    reply = run_agent("Trials for recurrent GBM?", agent=agent)
+    assert reply.answer == "1. NCT00916409"
+
+
+def test_rewrite_request_does_not_make_its_ids_sources():
+    messages = [{"role": "user", "content": [{"text": rewrite_request({"NCT99999999"})}]}]
+    assert source_ids(messages) == set()
+
+
+def test_drop_unsourced_keeps_other_lines():
+    answer = "Intro.\n1. NCT00916409 EF-14\n2. NCT99999999 invented\nAsk your team."
+    assert drop_unsourced(answer, {"NCT99999999"}) == (
+        "Intro.\n1. NCT00916409 EF-14\nAsk your team."
+    )

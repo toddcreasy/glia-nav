@@ -112,6 +112,11 @@ def tool_calls(messages: list) -> list[ToolCall]:
     ]
 
 
+# Opens the message run_agent sends to have an answer rewritten. It names the IDs the
+# answer should not have cited, so source_ids must not count them as the user's.
+REWRITE_PREFIX = "Your answer cited "
+
+
 def source_ids(messages: list) -> set[str]:
     """The IDs the conversation has shown the model: tool results, which arrive as the
     search endpoint's JSON text, and anything the user typed.
@@ -129,6 +134,8 @@ def source_ids(messages: list) -> set[str]:
                 item.get("text", "") for item in block.get("toolResult", {}).get("content", [])
             ]
             for text in texts:
+                if text.startswith(REWRITE_PREFIX):
+                    continue
                 found |= _ids(text, PMID_FIELD) | _ids(text, PMID_CITED)
     return found
 
@@ -211,31 +218,68 @@ def _tool_call_counts(agent: Agent) -> dict[str, int]:
     }
 
 
+def _answer(result) -> str:
+    if result.structured_output is not None:
+        return result.structured_output.answer
+    # A guardrail intervention ends the loop before the model can call the
+    # structured-output tool, so there is nothing to return but the message itself,
+    # which carries the guardrail's blocked text.
+    text = "".join(block.get("text", "") for block in result.message.get("content", []))
+    return text.strip() or "That request could not be answered."
+
+
+def rewrite_request(unsourced: set[str]) -> str:
+    return (
+        f"{REWRITE_PREFIX}{', '.join(sorted(unsourced))}, which did not appear in the "
+        "search results in this conversation. Rewrite the answer using only trials and "
+        "papers from those results, and leave these IDs out entirely."
+    )
+
+
+def drop_unsourced(answer: str, unsourced: set[str]) -> str:
+    """The last resort after a rewrite still cites outside the results: drop every line
+    that names one of those IDs. cited_ids lowercases DOIs, so matching is lowercase."""
+    keys = {i.split()[-1].lower() for i in unsourced}
+    kept = [line for line in answer.splitlines() if not any(k in line.lower() for k in keys)]
+    return "\n".join(kept).strip()
+
+
 def run_agent(prompt: str, agent: Agent | None = None) -> AgentReply:
-    """Run one turn and log the token usage that turn cost."""
+    """Run one turn and log the token usage that turn cost.
+
+    An answer that cites an NCT ID, PMID, or DOI the conversation never showed the model
+    is sent back once to be rewritten from the results; Opus 4.6 added trials from its
+    own memory on patient questions. If the rewrite still does, those lines are dropped.
+    """
     agent = agent or build_agent()
     before = _tool_call_counts(agent)
     turn_start = len(agent.messages)
     started = time.monotonic()
-    result = agent(prompt)
+    results = [agent(prompt)]
+    answer = _answer(results[0])
+    sources = source_ids(agent.messages)
+    first_unsourced = cited_ids(answer) - sources
+    unsourced = first_unsourced
+    if unsourced:
+        results.append(agent(rewrite_request(unsourced)))
+        answer = _answer(results[-1])
+        sources = source_ids(agent.messages)
+        unsourced = cited_ids(answer) - sources
+        if unsourced:
+            answer = drop_unsourced(answer, unsourced)
+
     # accumulated_usage and cycle_count run for the life of the agent, and server.py
     # reuses one agent for every request, so both would report the total since process
     # start. Strands appends a fresh AgentInvocation on entry to every call, so the
-    # last one is this turn. It carries the cache token keys the same way.
-    invocation = result.metrics.agent_invocations[-1]
-    usage = invocation.usage
+    # last one is each call's own. It carries the cache token keys the same way.
+    invocations = [r.metrics.agent_invocations[-1] for r in results]
+    usage = {
+        key: sum(inv.usage.get(key, 0) for inv in invocations)
+        for key in ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheWriteInputTokens")
+    }
     tools_called = sorted(
         name for name, count in _tool_call_counts(agent).items() if count > before.get(name, 0)
     )
-    sources = source_ids(agent.messages)
-    if result.structured_output is not None:
-        answer = result.structured_output.answer
-    else:
-        # A guardrail intervention ends the loop before the model can call the
-        # structured-output tool, so there is nothing to return but the message itself,
-        # which carries the guardrail's blocked text.
-        text = "".join(block.get("text", "") for block in result.message.get("content", []))
-        answer = text.strip() or "That request could not be answered."
 
     logger.info(
         "agent run",
@@ -243,13 +287,16 @@ def run_agent(prompt: str, agent: Agent | None = None) -> AgentReply:
             "model": agent.model.get_config()["model_id"],
             "input_tokens": usage["inputTokens"],
             "output_tokens": usage["outputTokens"],
-            "cache_read": usage.get("cacheReadInputTokens", 0),
-            "cache_write": usage.get("cacheWriteInputTokens", 0),
-            "cycles": len(invocation.cycles),
+            "cache_read": usage["cacheReadInputTokens"],
+            "cache_write": usage["cacheWriteInputTokens"],
+            "cycles": sum(len(inv.cycles) for inv in invocations),
             "tools_called": tools_called,
-            # Cited IDs the conversation never showed the model: likely invented.
-            "unsourced_ids": len(cited_ids(answer) - sources),
-            "stop_reason": result.stop_reason,
+            # Cited IDs the conversation never showed the model: likely invented. The
+            # first count is before the rewrite; the second is what the user saw.
+            "unsourced_ids": len(first_unsourced),
+            "rewritten": len(results) > 1,
+            "unsourced_dropped": len(unsourced),
+            "stop_reason": results[-1].stop_reason,
             "latency_ms": round((time.monotonic() - started) * 1000),
         },
     )
@@ -259,8 +306,5 @@ def run_agent(prompt: str, agent: Agent | None = None) -> AgentReply:
         used_tool=bool(tools_called),
         source_ids=sorted(sources),
         tool_calls=tool_calls(agent.messages[turn_start:]),
-        tokens=usage["inputTokens"]
-        + usage["outputTokens"]
-        + usage.get("cacheReadInputTokens", 0)
-        + usage.get("cacheWriteInputTokens", 0),
+        tokens=sum(usage.values()),
     )
