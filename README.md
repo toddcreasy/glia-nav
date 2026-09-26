@@ -1,9 +1,31 @@
 # glia-nav
 
-An LLM-assisted navigator for glioblastoma (GBM) clinical trials and research literature. You enter
-a patient's biomarker profile from their pathology report, and Claude-backed agents search
-ClinicalTrials.gov and PubMed for trials the patient might qualify for, compassionate-use (expanded
-access) options, and relevant recent papers.
+**Live demo: https://main.d1zp4oaz4g1yvk.amplifyapp.com**
+
+## Why I built this
+
+A close family member was recently diagnosed with glioblastoma. Within days, the rest of us were
+scrambling to understand the disease, what treatments exist, and which clinical trials they might be
+able to join. The answers are public, but they are spread across ClinicalTrials.gov, PubMed, and
+eligibility criteria written for clinicians, and pulling them together took hours nobody had.
+
+glia-nav is the tool I wanted that week. It searches every glioblastoma trial and paper in one
+place, filters trials by what is on a pathology report (IDH and MGMT status, recurrence,
+performance status), and answers plain questions with citations to the trials and papers behind
+them. It is built to be quick and to be kind: it gives the general evidence and leaves decisions
+about one person's care to their oncology team.
+
+It is also a portfolio project. I used a real need to show how I build with AWS, LLMs, Python, and
+CI:
+
+- **AWS:** CDK in Python, Bedrock (Claude Opus 4.6 and Haiku 4.5), AgentCore Runtime and Gateway,
+  Aurora Serverless v2 with pgvector, App Runner, Lambda, Amplify.
+- **LLMs:** a chat agent that searches through an MCP gateway and cites only what it found; Haiku
+  reading trial eligibility into structured fields, with its answers checked in code against quotes
+  from the criteria.
+- **Python:** FastAPI, Strands Agents, Pydantic, uv, pytest.
+- **CI:** GitHub Actions with OIDC and no stored AWS keys. Every merge runs the tests and a
+  golden-set eval of the agent before it deploys.
 
 **Research use only. Not medical advice, and not a medical device.** Everything shown is retrieved
 from public registries and surfaced by an LLM; it may be incomplete, outdated, or wrong. Do not use
@@ -12,13 +34,11 @@ team before acting on anything here.
 
 ## Status
 
-The platform is built and deployed. Five CDK stacks are live in account `570643734415` / `us-east-1`,
-and every merge to `main` runs the golden-set evals, deploys all stacks, and ships the frontend.
-Measured cost is $1.68/month against a $30 budget.
-
-What exists today is the skeleton, not the product: the API serves `/health`, `/health/db`, and
-`/me`, and the agent carries two tools (a local clock and a database health check reached over MCP).
-The trial and literature search is the feature work that starts on top of it.
+Live as a public demo since 2026-09-25, with no sign-in. Six CDK stacks run in `us-east-1`, and
+every merge to `main` runs the golden-set evals, deploys the stacks, and ships the frontend. Chat
+spend is capped at 150,000 tokens a day and 10 chats an hour per visitor, under a $30 monthly
+budget alarm. Search, the chat agent, daily ingest from both sources, and structured eligibility
+are built. The known gaps are listed in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-gaps).
 
 ## Documentation
 
