@@ -83,6 +83,9 @@ jobs:
       # Golden set against the deployed Gateway and with the deployed guardrail, before
       # anything ships. Without a version the agent runs unguarded, as it did before.
       - name: Evals
+        # A full run takes about 6 minutes. On 2026-09-25 one stalled after 20 model calls
+        # and would have held the deploy queue for GitHub's 6-hour default; fail it instead.
+        timeout-minutes: 20
         env:
           GATEWAY_URL: ${{ steps.outputs.outputs.gateway_url }}
           GUARDRAIL_ID: ${{ steps.outputs.outputs.guardrail_version && steps.outputs.outputs.guardrail_id || '' }}
