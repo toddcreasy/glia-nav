@@ -5,15 +5,12 @@ role grant against it. `agent_stack` already imports `ops_stack`, so the constan
 cannot sit in either one without a circular import.
 """
 
-# Every model the agent is allowed to invoke: the four from the decisions table plus
-# the two fallbacks. Listing the gated ones now means nothing changes when they open.
+# Every model the agent is allowed to invoke. The account ceiling is version 4.6;
+# the 5-series models refuse to invoke here, so they are not granted.
 ALLOWED_MODELS = (
     "anthropic.claude-haiku-4-5-20251001-v1:0",
     "anthropic.claude-sonnet-4-6",
-    "anthropic.claude-sonnet-5",
     "anthropic.claude-opus-4-6-v1",
-    "anthropic.claude-opus-5",
-    "anthropic.claude-fable-5",
 )
 # A us. inference profile fans out across these three regions, and InvokeModel is
 # authorized against the foundation-model ARN in whichever one serves the call.
