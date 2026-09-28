@@ -117,7 +117,7 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | Python | 3.14, pinned in `.python-version` |
 | `MODEL_SMALL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
 | `MODEL_LARGE` | `us.anthropic.claude-opus-4-6-v1`. Opus 5 is account-gated and is not reachable |
-| Models allowed | Haiku 4.5, Sonnet 4.5, Sonnet 4.6, Opus 4.5, Opus 4.6, as `us.` inference profiles. No other IDs. |
+| Models allowed | Haiku 4.5, Sonnet 4.6, Opus 4.6, as `us.` inference profiles (`infra/stacks/models.py`). No other IDs. |
 
 The account ceiling is version 4.6. Everything 4.7 and later (Opus 4.7, Opus 4.8, Sonnet 5, Opus 5,
 Fable 5) returns `AccessDeniedException` because its tokens-per-minute service quota is 0, while
