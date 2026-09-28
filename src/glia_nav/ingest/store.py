@@ -7,6 +7,7 @@ in SQL. BatchExecuteStatement caps the request size, so rows go in batches of BA
 import json
 import time
 from datetime import date
+from itertools import batched
 
 from glia_nav.config import IngestSettings
 
@@ -228,6 +229,39 @@ class Store:
                 for nct_id in p.nct_ids
             ],
         )
+
+    def paper_ids(self, page: int = 20000) -> set[str]:
+        """Every stored PMID. Paged: the Data API refuses a result over 1 MB."""
+        pmids: set[str] = set()
+        after = ""
+        while True:
+            records = self.execute(
+                "SELECT pmid FROM papers WHERE pmid > :after ORDER BY pmid LIMIT :page",
+                {"after": after, "page": page},
+            )
+            pmids.update(r["pmid"] for r in records)
+            if len(records) < page:
+                return pmids
+            after = records[-1]["pmid"]
+
+    def delete_papers(self, pmids: list[str]) -> None:
+        """Remove papers with their chunks, PubMed-sourced trial links, and raw XML.
+        Links CT.gov asserted stay: the trial record still cites the PMID."""
+        ids = "(SELECT jsonb_array_elements_text(CAST(:ids AS jsonb)))"
+        for pmid_batch in batched(pmids, 1000, strict=False):
+            batch = list(pmid_batch)
+            self.execute(
+                f"DELETE FROM chunks WHERE source = 'paper' AND source_id IN {ids}", {"ids": batch}
+            )
+            self.execute(
+                f"DELETE FROM trial_papers WHERE source = 'pubmed' AND pmid IN {ids}",
+                {"ids": batch},
+            )
+            self.execute(f"DELETE FROM papers WHERE pmid IN {ids}", {"ids": batch})
+            self.s3.delete_objects(
+                Bucket=self.settings.documents_bucket,
+                Delete={"Objects": [{"Key": paper_raw_key(p)} for p in batch], "Quiet": True},
+            )
 
     def chunk_hashes(self, source: str, source_ids: list[str]) -> dict[tuple[str, str], str]:
         records = self.execute(

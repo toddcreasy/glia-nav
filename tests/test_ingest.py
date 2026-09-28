@@ -40,6 +40,16 @@ def test_trial_search_text_includes_aliases():
     assert "OCR44973" in other
 
 
+def test_trial_aliases_match_with_or_without_spacing():
+    study = json.loads(json.dumps(STUDIES[0]))
+    study["protocolSection"]["identificationModule"]["acronym"] = "CheckMate548"
+    text = ctgov.parse_study(study).search_text
+    assert "CheckMate 548" in text
+    assert "CheckMate-548" in text
+    assert "EF14" in text
+    assert "EF 14" in text
+
+
 def test_trial_search_text_includes_site_places():
     # The recruiting fixture trial has one site: Gainesville, Florida.
     text = ctgov.parse_study(STUDIES[1]).search_text
@@ -228,3 +238,68 @@ def test_unchanged_chunks_are_not_reembedded(monkeypatch):
     assert count == 1
     assert embedded == ["new"]
     assert [c["source_id"] for c in store.chunks] == ["p2"]
+
+
+class ReconcileStore:
+    def __init__(self, stored):
+        self.stored = stored
+        self.deleted = None
+        self.finished = None
+
+    def wake(self):
+        pass
+
+    def start_run(self, source):
+        return 1
+
+    def finish_run(self, run_id, status, watermark, **counts):
+        self.finished = (status, watermark)
+
+    def paper_ids(self):
+        return self.stored
+
+    def delete_papers(self, pmids):
+        self.deleted = pmids
+
+
+class YearEUtils:
+    def __init__(self, by_year):
+        self.by_year = by_year
+
+    def search(self, start, end, datetype):
+        assert datetype == "edat"
+        return self.by_year.get(start.year, [])
+
+
+def reconciler(stored, monkeypatch):
+    store = ReconcileStore(stored)
+    ingestor = Ingestor(store, bedrock=None, http=None, embedding_model="m", extraction_model="x")
+    fetched = []
+    monkeypatch.setattr(ingestor, "papers", lambda _e, pmids: fetched.extend(pmids) or {})
+    return ingestor, store, fetched
+
+
+def test_reconcile_fetches_missing_and_deletes_gone_papers(monkeypatch):
+    stored = {str(n) for n in range(1, 201)}
+    ingestor, store, fetched = reconciler(stored, monkeypatch)
+    # A paper dated next year was entered this year, so the entry-date slices reach it.
+    this_year = date.today().year
+    upstream = YearEUtils({2020: [str(n) for n in range(2, 201)], this_year: ["999"]})
+
+    ingestor.reconcile_papers(upstream, 2020)
+
+    assert fetched == ["999"]
+    assert store.deleted == ["1"]
+    # Reconcile reads no revisions, so the daily update's watermark stays put.
+    assert store.finished == ("succeeded", None)
+
+
+def test_reconcile_refuses_mass_deletion(monkeypatch):
+    ingestor, store, fetched = reconciler({str(n) for n in range(100)}, monkeypatch)
+
+    with pytest.raises(RuntimeError, match="refusing to delete"):
+        ingestor.reconcile_papers(YearEUtils({2020: ["1"]}), 2020)
+
+    assert store.deleted is None
+    assert fetched == []
+    assert store.finished[0] == "failed"

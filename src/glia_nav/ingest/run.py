@@ -22,6 +22,9 @@ logger = logging.getLogger("glia_nav.ingest")
 # Titan and S3 calls are network-bound; a few threads cut wall time without tripping quotas.
 WORKERS = 4
 TRIAL_BATCH = 100
+# A reconcile that would delete more than this share of stored papers stops instead: an
+# ESearch slice that came back short would otherwise read as mass withdrawal.
+MAX_REMOVED_SHARE = 0.01
 # Re-read a day before the watermark: records posted late on the watermark day would
 # otherwise fall between two runs.
 OVERLAP = timedelta(days=1)
@@ -153,8 +156,10 @@ class Ingestor:
             logger.info("papers batch", extra=counts)
         return counts
 
-    def run(self, source: str, work) -> dict:
-        """Record an ingest_runs row around `work`, a zero-argument callable returning counts."""
+    def run(self, source: str, work, advances_watermark: bool = True) -> dict:
+        """Record an ingest_runs row around `work`, a zero-argument callable returning counts.
+        A run that does not re-read revised records must not advance the watermark, or
+        the next update would skip revisions since the last one."""
         started = date.today()
         self.store.wake()
         run_id = self.store.start_run(source)
@@ -163,7 +168,8 @@ class Ingestor:
         except Exception as error:
             self.store.finish_run(run_id, "failed", None, error=repr(error)[:2000])
             raise
-        self.store.finish_run(run_id, "succeeded", started, **counts)
+        watermark = started if advances_watermark else None
+        self.store.finish_run(run_id, "succeeded", watermark, **counts)
         logger.info("ingest run finished", extra={"source": source, **counts})
         return counts
 
@@ -197,3 +203,28 @@ class Ingestor:
             return total
 
         return self.run("pubmed", work)
+
+    def reconcile_papers(self, eutils: pubmed.EUtils, first_year: int) -> dict:
+        """Match stored papers to PubMed's full result set: fetch what is missing, delete
+        what PubMed no longer returns (withdrawn, or no longer matching TERM).
+
+        Sliced by entry date, which every record has. The backfill sliced by publication
+        date and missed records dated past its last slice or between two slices.
+        """
+
+        def work() -> dict:
+            upstream: set[str] = set()
+            for year in range(first_year, date.today().year + 1):
+                upstream.update(eutils.search(date(year, 1, 1), date(year, 12, 31), "edat"))
+            stored = self.store.paper_ids()
+            missing, gone = sorted(upstream - stored), sorted(stored - upstream)
+            logger.info("papers reconcile", extra={"missing": len(missing), "gone": len(gone)})
+            if len(gone) > MAX_REMOVED_SHARE * len(stored):
+                raise RuntimeError(
+                    f"{len(gone)} of {len(stored)} stored papers not in PubMed; refusing to delete"
+                )
+            counts = self.papers(eutils, missing)
+            self.store.delete_papers(gone)
+            return counts
+
+        return self.run("pubmed", work, advances_watermark=False)
