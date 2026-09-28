@@ -103,7 +103,7 @@ What each directory is for, and which of these are real conventions rather than 
 ## AWS environment
 
 - Account `570643734415`, Region `us-east-1`, CLI profile `default`. The profile is IAM Identity Center, not root.
-- Sessions last 12 hours. On `ExpiredToken` or `Unable to locate credentials`, ask the maintainer to run `aws sso login --profile default`.
+- The Identity Center portal session lasts 3 days; the CLI refreshes the 12-hour role credentials on its own inside it. On `ExpiredToken` or `Unable to locate credentials`, ask the maintainer to run `aws sso login --profile default`.
 - Signs in through the account's IAM Identity Center access portal, permission set `AdministratorAccess`.
 - How identity, the Organization, and the Agent Toolkit were set up: see `docs/SETUP.md`.
 
