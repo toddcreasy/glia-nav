@@ -1,9 +1,10 @@
 """Load every glioblastoma trial and paper. Run once locally; the scheduled job does the deltas.
 
-Usage: uv run python scripts/ingest_backfill.py [trials|papers|all] [--from-year YEAR]
+Usage: uv run python scripts/ingest_backfill.py [trials|papers|all|reconcile] [--from-year YEAR]
 
 Safe to re-run or resume: every write is an upsert and unchanged chunks are not re-embedded.
 --from-year resumes the paper backfill at that publication year after an interruption.
+reconcile fetches papers the backfill missed and deletes ones PubMed no longer returns.
 """
 
 import argparse
@@ -24,7 +25,9 @@ FIRST_YEAR = 1940
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("what", choices=["trials", "papers", "all"], nargs="?", default="all")
+    parser.add_argument(
+        "what", choices=["trials", "papers", "all", "reconcile"], nargs="?", default="all"
+    )
     parser.add_argument("--from-year", type=int, default=FIRST_YEAR)
     args = parser.parse_args()
 
@@ -45,6 +48,8 @@ def main() -> None:
             print("trials", ingestor.run("ctgov", lambda: ingestor.trials(None)))
         if args.what in ("papers", "all"):
             print("papers", ingestor.backfill_papers(EUtils(http, api_key), args.from_year))
+        if args.what == "reconcile":
+            print("reconcile", ingestor.reconcile_papers(EUtils(http, api_key), FIRST_YEAR))
 
 
 if __name__ == "__main__":

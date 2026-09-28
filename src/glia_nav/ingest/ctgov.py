@@ -1,5 +1,6 @@
 """ClinicalTrials.gov API v2: fetch glioblastoma studies and parse them into rows."""
 
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -12,6 +13,9 @@ PAGE_SIZE = 200
 # BACKGROUND references are literature the sponsor cited when designing the trial, not
 # publications of the trial itself, so they would link a trial to papers about other work.
 RESULT_REFERENCE_TYPES = {"RESULT", "DERIVED"}
+
+# A letter-digit boundary inside an alias, where people add or drop a space or hyphen.
+LETTER_DIGIT = re.compile(r"(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])")
 
 AGE_UNITS = {"year": 1, "month": 12, "week": 52, "day": 365, "hour": 8760, "minute": 525600}
 
@@ -151,6 +155,11 @@ def parse_study(study: dict) -> ParsedTrial:
         ident.get("orgStudyIdInfo", {}).get("id"),
         *(s.get("id") for s in ident.get("secondaryIdInfos", [])),
     ]
+    # CT.gov stores CheckMate548 and EF-14; people type CheckMate 548 and EF14. Full-text
+    # search tokenizes each spelling differently, so index the joined, spaced, and
+    # hyphenated forms as well.
+    joined = [re.sub(r"[\s-]+", "", a) for a in aliases if a]
+    aliases += [LETTER_DIGIT.sub(sep, a) for a in joined for sep in ("", " ", "-")]
     search_text = " ".join(
         filter(
             None,
