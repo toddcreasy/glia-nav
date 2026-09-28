@@ -211,8 +211,7 @@ PII_POLICY = (
 )
 
 MODEL_SMALL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-# claude-opus-5 is the decided large tier but is still account-gated, so the large
-# tier runs on the documented fallback until the gate lifts.
+# Opus 4.6 is the newest large model this account can invoke; 4.7 and later are gated.
 MODEL_LARGE = "us.anthropic.claude-opus-4-6-v1"
 
 
@@ -618,7 +617,7 @@ class AgentStack(cdk.Stack):
         )
 
         # The L2 generates this role with bedrock:InvokeModel on inference-profile/*
-        # and foundation-model/*, every model in the account rather than the six the
+        # and foundation-model/*, every model in the account rather than the three the
         # runtime is pinned to. Builtin evaluators are scored service-side and the
         # prerequisites doc lists model invocation as needed only for custom
         # evaluators, which this config does not use, so the grant is likely unused
