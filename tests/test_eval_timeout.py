@@ -10,9 +10,10 @@ def test_a_prompt_answer_comes_back():
 
 def test_a_stalled_call_times_out_without_waiting_for_it():
     started = time.monotonic()
-    with pytest.raises(TimeoutError, match="no answer in 0.2 s"):
+    with pytest.raises(TimeoutError, match="no answer in 0.2 s") as error:
         within(0.2, lambda: time.sleep(30))
     assert time.monotonic() - started < 2
+    assert "time.sleep(30)" in str(error.value)
 
 
 def test_the_calls_own_error_is_raised():
