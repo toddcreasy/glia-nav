@@ -5,7 +5,9 @@ the default `pytest` run. Run them with `uv run pytest evals`.
 """
 
 import queue
+import sys
 import threading
+import traceback
 from collections.abc import Callable
 
 import pytest
@@ -23,7 +25,8 @@ CASE_TIMEOUT_S = 180
 
 def within(seconds: float, call: Callable[[], AgentReply]) -> AgentReply:
     """call's result, or TimeoutError once seconds pass. The call runs on a daemon thread,
-    so one that never returns cannot keep pytest from exiting."""
+    so one that never returns cannot keep pytest from exiting. The error carries the
+    stalled thread's stack, the only record of where the call was waiting."""
     outcome: queue.Queue = queue.Queue()
 
     def run() -> None:
@@ -32,11 +35,14 @@ def within(seconds: float, call: Callable[[], AgentReply]) -> AgentReply:
         except Exception as exc:
             outcome.put((False, exc))
 
-    threading.Thread(target=run, daemon=True).start()
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
     try:
         ok, value = outcome.get(timeout=seconds)
     except queue.Empty:
-        raise TimeoutError(f"no answer in {seconds:g} s") from None
+        frame = sys._current_frames().get(worker.ident)
+        stack = "".join(traceback.format_stack(frame)) if frame else "(thread gone)\n"
+        raise TimeoutError(f"no answer in {seconds:g} s; stalled at:\n{stack}") from None
     if not ok:
         raise value
     return value
