@@ -286,7 +286,7 @@ SOC answer cites at least one source. With the production guardrail on, location
 question (Boston, 45, 72) still reach the tool's filters.
 
 **Model tiering.** Extraction, filtering, and routing go to the Haiku tier; only final synthesis
-uses the large tier. IAM pins invocation to six model IDs across the three regions a `us.` inference
+uses the large tier. IAM pins invocation to three model IDs across the three regions a `us.` inference
 profile fans out to, on both the runtime role and the CI role. The account ceiling is version 4.6:
 anything later has a tokens-per-minute quota of zero and cannot be lifted self-serve.
 

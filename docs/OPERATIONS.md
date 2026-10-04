@@ -45,7 +45,7 @@ a killed `cdk deploy` leaves CloudFormation mid-update. The order matters:
    completion for up to 10 minutes.
 
 The CI role (`glia-nav-github-actions`) is scoped to assuming the CDK bootstrap roles, reading stack
-outputs, invoking the six allowed Bedrock models, applying the account's guardrail, invoking the
+outputs, invoking the three allowed Bedrock models, applying the account's guardrail, invoking the
 Gateway, and creating Amplify
 deployments. Sessions are capped at one hour. The trust policy accepts both the legacy and the
 numeric-id forms of GitHub's OIDC subject claim, so a rollback on GitHub's side does not lock CI out.
