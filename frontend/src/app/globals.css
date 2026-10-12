@@ -1,26 +1,95 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+/* Palette from design direction B ("Calm guide"): cool gray ground, indigo accent. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.75rem;
+  --background: #f5f7fa;
+  --foreground: #1c2433;
+  --card: #ffffff;
+  --card-foreground: #1c2433;
+  --popover: #ffffff;
+  --popover-foreground: #1c2433;
+  --primary: #3b4cb8;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0fb;
+  --secondary-foreground: #2a378a;
+  --muted: #eef1f5;
+  --muted-foreground: #4a5568;
+  --accent: #eef0fb;
+  --accent-foreground: #2a378a;
+  --destructive: #c53030;
+  --border: #e3e8ef;
+  --input: #c9d1dd;
+  --ring: #3b4cb8;
+  --success: #2f7a4d;
+  --warning: #7a4a00;
+  --warning-soft: #fff4e0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #11151d;
+    --foreground: #e6e9ef;
+    --card: #1a1f2b;
+    --card-foreground: #e6e9ef;
+    --popover: #1a1f2b;
+    --popover-foreground: #e6e9ef;
+    --primary: #8c9bff;
+    --primary-foreground: #11151d;
+    --secondary: #232a45;
+    --secondary-foreground: #c7cdf2;
+    --muted: #1f2533;
+    --muted-foreground: #a3acba;
+    --accent: #232a45;
+    --accent-foreground: #c7cdf2;
+    --destructive: #f87171;
+    --border: #2a3140;
+    --input: #3a4252;
+    --ring: #8c9bff;
+    --success: #6cc48f;
+    --warning: #f2b544;
+    --warning-soft: #2e2414;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-public-sans);
+  --font-serif: var(--font-source-serif);
   --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
 }

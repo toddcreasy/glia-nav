@@ -63,6 +63,7 @@ AWS-first. Anything not AWS is listed with the reason AWS cannot fill the slot.
 | DB migrations | Alembic | No | AWS has no schema migration tool for application tables. |
 | Dev-loop evals | pydantic-evals golden set in pytest | No | AgentCore Evaluations scores deployed traces. Pre-deploy evals must run locally in seconds. Both are used. |
 | Frontend framework | Next.js + React + Tailwind | No | AWS hosts frontends (Amplify) but does not make a frontend framework. |
+| UI components | shadcn/ui (Radix primitives) | No | Component source is copied into `frontend/src/components/ui` and styled with Tailwind. AWS makes no React component library. |
 | Code host + CI runner | GitHub + GitHub Actions | No | The repo lives on GitHub. Actions integrates natively, has a free tier, and assumes an AWS role via OIDC with no stored keys. AWS CodePipeline would add setup and cost for no benefit at this scale. |
 | Containers | Docker | No | Open standard. AWS consumes it; it does not replace it. |
 
