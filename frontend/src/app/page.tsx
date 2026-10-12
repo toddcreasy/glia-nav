@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
 
-type Tab = "search" | "ask";
-
 type IndexStats = { trials: number; papers: number; updated_at: string };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -17,7 +15,6 @@ const UPDATED = new Intl.DateTimeFormat("en-US", {
 });
 
 export default function Page() {
-  const [tab, setTab] = useState<Tab>("search");
   const [stats, setStats] = useState<IndexStats | null>(null);
 
   // The daily ingest publishes these. Until it has, the line stays hidden.
@@ -70,24 +67,21 @@ export default function Page() {
             </div>
           </div>
 
+          {/* Search and chat sit side by side on wide screens; on a phone these jump down. */}
           <nav aria-label="Sections" className="flex gap-1">
             {(
               [
-                ["search", "Search"],
-                ["ask", "Ask the navigator"],
+                ["#search", "Search"],
+                ["#ask", "Ask the navigator"],
               ] as const
-            ).map(([id, label]) => (
+            ).map(([href, label]) => (
               <Button
-                key={id}
-                type="button"
+                key={href}
+                asChild
                 variant="ghost"
-                onClick={() => setTab(id)}
-                aria-pressed={tab === id}
-                className={`text-[15px] font-normal aria-pressed:bg-secondary aria-pressed:font-medium aria-pressed:text-secondary-foreground ${
-                  tab === id ? "" : "text-muted-foreground"
-                }`}
+                className="text-[15px] font-normal text-muted-foreground"
               >
-                {label}
+                <a href={href}>{label}</a>
               </Button>
             ))}
           </nav>
@@ -102,13 +96,12 @@ export default function Page() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1120px] px-6 py-8 space-y-6">
-        {/* Both stay mounted so switching tabs keeps results and the conversation. */}
-        <div hidden={tab !== "search"}>
+      <div className="mx-auto flex max-w-[1120px] flex-wrap items-start gap-7 px-6 py-8">
+        <div className="min-w-0 flex-[999_1_560px]">
           <Search />
         </div>
-        <div hidden={tab !== "ask"}>
-          <Chat active={tab === "ask"} />
+        <div className="min-w-0 flex-[1_1_380px]">
+          <Chat />
         </div>
       </div>
     </>
