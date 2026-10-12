@@ -300,7 +300,7 @@ export default function Search() {
   const trialsOn = filters.kind !== "papers";
 
   return (
-    <section className="max-w-3xl space-y-6">
+    <section id="search" aria-label="Search" className="scroll-mt-6 space-y-6">
       <form onSubmit={submit} className="space-y-4 rounded-2xl border bg-card p-5">
         <label htmlFor="q" className="block font-semibold">
           What are you looking for?
@@ -602,7 +602,11 @@ function TrialList({ trials, located }: { trials: Trial[]; located: boolean }) {
             </div>
             {sites.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                {located ? "Locations matching your filter: " : "Locations include "}
+                {located
+                  ? "Locations matching your filter: "
+                  : trial.site_count === 1
+                    ? "Location: "
+                    : "Locations include "}
                 {sites.join("; ")}
                 {trial.site_count > sites.length &&
                   `, and ${trial.site_count - sites.length} more`}
