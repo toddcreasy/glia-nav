@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
 import GitHubMark from "./github-mark";
+import PilotBioMark from "./pilotbio-mark";
 import ThemeToggle from "./theme-toggle";
 
 const REPO = "https://github.com/toddcreasy/glia-nav";
@@ -59,6 +60,16 @@ export default function Page() {
               className="mr-2 text-[13px] text-muted-foreground hover:text-foreground"
             >
               Built by <span className="font-medium text-foreground">Todd Creasy</span>
+            </a>
+            <span aria-hidden="true" className="mr-2 h-4 w-px bg-border" />
+            <a
+              href="https://pilotbio.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mr-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground hover:opacity-80"
+            >
+              <PilotBioMark />
+              PilotBio
             </a>
             <Button asChild variant="ghost" size="icon" className="text-muted-foreground">
               <a
