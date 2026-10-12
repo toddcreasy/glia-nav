@@ -1,4 +1,4 @@
-# glia-nav
+# GliaNav
 
 **Live demo: https://main.d1zp4oaz4g1yvk.amplifyapp.com**
 
