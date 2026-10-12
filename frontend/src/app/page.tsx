@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
 
@@ -11,45 +12,79 @@ export default function Page() {
 
   // A public demo: no sign-in. The API bounds chat spend with a daily token limit.
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10 space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">glia-nav</h1>
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Search glioblastoma clinical trials and research papers, or ask the
-          navigator. Chat is a demo with a daily limit.
-        </p>
+    <>
+      <header className="border-b bg-card">
+        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-6 gap-y-3 px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 28 28"
+              aria-hidden="true"
+              className="text-primary"
+            >
+              <rect
+                x="1"
+                y="1"
+                width="26"
+                height="26"
+                rx="6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M8 18c2-6 4-9 6-9s4 3 6 9"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <circle cx="14" cy="9" r="2" fill="currentColor" />
+            </svg>
+            <div className="flex flex-col leading-tight">
+              <h1 className="font-serif text-xl font-semibold tracking-tight">
+                glia-nav
+              </h1>
+              <p className="text-[13px] text-muted-foreground">
+                Glioblastoma trials and research, in plain language
+              </p>
+            </div>
+          </div>
+
+          <nav aria-label="Sections" className="flex gap-1">
+            {(
+              [
+                ["search", "Search"],
+                ["ask", "Ask the navigator"],
+              ] as const
+            ).map(([id, label]) => (
+              <Button
+                key={id}
+                type="button"
+                variant="ghost"
+                onClick={() => setTab(id)}
+                aria-pressed={tab === id}
+                className={`text-[15px] font-normal aria-pressed:bg-secondary aria-pressed:font-medium aria-pressed:text-secondary-foreground ${
+                  tab === id ? "" : "text-muted-foreground"
+                }`}
+              >
+                {label}
+              </Button>
+            ))}
+          </nav>
+        </div>
       </header>
 
-      <nav className="flex gap-4 border-b border-black/10 dark:border-white/15 text-sm">
-        {(
-          [
-            ["search", "Search"],
-            ["ask", "Ask the navigator"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            aria-pressed={tab === id}
-            className={`-mb-px border-b-2 px-1 py-2 ${
-              tab === id
-                ? "border-foreground font-medium"
-                : "border-transparent text-black/60 dark:text-white/60"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {/* Both stay mounted so switching tabs keeps results and the conversation. */}
-      <div hidden={tab !== "search"}>
-        <Search />
+      <div className="mx-auto max-w-[1120px] px-6 py-8 space-y-6">
+        {/* Both stay mounted so switching tabs keeps results and the conversation. */}
+        <div hidden={tab !== "search"}>
+          <Search />
+        </div>
+        <div hidden={tab !== "ask"}>
+          <Chat active={tab === "ask"} />
+        </div>
       </div>
-      <div hidden={tab !== "ask"}>
-        <Chat active={tab === "ask"} />
-      </div>
-    </div>
+    </>
   );
 }
