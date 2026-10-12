@@ -6,7 +6,8 @@
       "Bash(cdk diff:*)",
       "Bash(cdk synth:*)",
       "Bash(cdk bootstrap:*)",
-      "Bash(gh pr merge * --squash)"
+      "Bash(gh pr merge * --squash)",
+      "Bash(gh pr merge * --merge)"
     ],
     "deny": [
       "Bash(gh pr merge *--admin*)"
