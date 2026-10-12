@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* The theme is an attribute on <html>, set before first paint by the script in layout.tsx. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* Palette from design direction B ("Calm guide"): cool gray ground, indigo accent. */
 :root {
   --radius: 0.75rem;
@@ -27,30 +30,28 @@
   --warning-soft: #fff4e0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #11151d;
-    --foreground: #e6e9ef;
-    --card: #1a1f2b;
-    --card-foreground: #e6e9ef;
-    --popover: #1a1f2b;
-    --popover-foreground: #e6e9ef;
-    --primary: #8c9bff;
-    --primary-foreground: #11151d;
-    --secondary: #232a45;
-    --secondary-foreground: #c7cdf2;
-    --muted: #1f2533;
-    --muted-foreground: #a3acba;
-    --accent: #232a45;
-    --accent-foreground: #c7cdf2;
-    --destructive: #f87171;
-    --border: #2a3140;
-    --input: #3a4252;
-    --ring: #8c9bff;
-    --success: #6cc48f;
-    --warning: #f2b544;
-    --warning-soft: #2e2414;
-  }
+[data-theme="dark"] {
+  --background: #11151d;
+  --foreground: #e6e9ef;
+  --card: #1a1f2b;
+  --card-foreground: #e6e9ef;
+  --popover: #1a1f2b;
+  --popover-foreground: #e6e9ef;
+  --primary: #8c9bff;
+  --primary-foreground: #11151d;
+  --secondary: #232a45;
+  --secondary-foreground: #c7cdf2;
+  --muted: #1f2533;
+  --muted-foreground: #a3acba;
+  --accent: #232a45;
+  --accent-foreground: #c7cdf2;
+  --destructive: #f87171;
+  --border: #2a3140;
+  --input: #3a4252;
+  --ring: #8c9bff;
+  --success: #6cc48f;
+  --warning: #f2b544;
+  --warning-soft: #2e2414;
 }
 
 @theme inline {
