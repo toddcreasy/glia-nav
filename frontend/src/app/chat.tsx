@@ -65,8 +65,8 @@ function AgentText({ text }: { text: string }) {
 function citations(text: string) {
   return [...new Set(text.match(CITATION) ?? [])].map((match) =>
     match.startsWith("NCT")
-      ? { label: `Trial ${match}`, href: citationLink(match) }
-      : { label: `Paper PMID ${match.replace(/\D/g, "")}`, href: citationLink(match) },
+      ? { label: match, href: citationLink(match) }
+      : { label: `PMID ${match.replace(/\D/g, "")}`, href: citationLink(match) },
   );
 }
 
@@ -76,35 +76,20 @@ const EXAMPLES = [
   "Are there trials for MGMT-unmethylated glioblastoma?",
 ];
 
-function Check() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0 text-success">
-      <path
-        d="M3 8.5l3 3 7-7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function Steps({ steps, live }: { steps: string[]; live: boolean }) {
   return (
-    <ol className="space-y-1.5 text-[13px] text-muted-foreground">
+    <ol className="space-y-1.5 font-mono text-[13px] text-muted-foreground">
       {steps.map((step, i) => {
         const current = live && i === steps.length - 1;
         return (
-          <li key={i} className={`flex items-center gap-2 ${current ? "text-foreground" : ""}`}>
+          <li key={i} className={`flex items-baseline gap-2 ${current ? "text-foreground" : ""}`}>
             {current ? (
               <span
                 aria-hidden="true"
-                className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                className="size-3 shrink-0 translate-y-0.5 animate-spin rounded-full border-2 border-primary border-t-transparent"
               />
             ) : (
-              <Check />
+              <span aria-hidden="true">✓</span>
             )}
             {step}
           </li>
@@ -227,25 +212,16 @@ export default function Chat() {
       aria-label="Ask the navigator"
       className="flex scroll-mt-6 flex-col rounded-2xl border bg-card lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
-        <h2 className="font-serif text-[19px] font-semibold">Ask the navigator</h2>
-        <div className="flex items-baseline gap-3 text-[13px] text-muted-foreground tabular-nums">
-          {usage && (
-            <span title={`Resets ${RESET_TIME.format(new Date(usage.resets_at))}`}>
-              {usage.remaining.toLocaleString()} tokens left today
-            </span>
-          )}
-          {turns.length > 0 && (
-            <button
-              type="button"
-              onClick={newConversation}
-              disabled={busy}
-              className="text-primary underline-offset-4 hover:underline disabled:opacity-50"
-            >
-              New conversation
-            </button>
-          )}
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b px-5 py-4">
+        <h2 className="text-[17px] font-semibold">Ask the navigator</h2>
+        {usage && (
+          <span
+            title={`Resets ${RESET_TIME.format(new Date(usage.resets_at))}`}
+            className="font-mono text-xs text-muted-foreground"
+          >
+            {usage.remaining.toLocaleString()} tokens left today
+          </span>
+        )}
       </div>
 
       <div ref={log} className="flex min-h-48 flex-col gap-4 overflow-y-auto p-5">
@@ -274,25 +250,32 @@ export default function Chat() {
           turn.role === "user" ? (
             <p
               key={i}
-              className="max-w-[85%] self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2.5 whitespace-pre-wrap text-background"
+              className="max-w-[85%] self-end rounded-xl rounded-br-none bg-foreground px-3.5 py-2.5 whitespace-pre-wrap text-background"
             >
               {turn.text}
             </p>
           ) : (
             <div key={i} className="space-y-3">
               {turn.steps && turn.steps.length > 0 && <Steps steps={turn.steps} live={false} />}
-              <p className="leading-relaxed whitespace-pre-wrap">
-                <AgentText text={turn.text} />
-              </p>
+              <div className="space-y-3 leading-relaxed">
+                {turn.text
+                  .split(/\n\s*\n/)
+                  .filter((paragraph) => paragraph.trim())
+                  .map((paragraph, j) => (
+                    <p key={j} className="whitespace-pre-wrap">
+                      <AgentText text={paragraph.trim()} />
+                    </p>
+                  ))}
+              </div>
               {citations(turn.text).length > 0 && (
-                <div className="flex flex-wrap gap-1.5 text-[13px]">
+                <div className="flex flex-wrap gap-1.5 font-mono text-[13px]">
                   {citations(turn.text).map((c) => (
                     <a
                       key={c.label}
                       href={c.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-full border border-secondary-foreground/20 bg-secondary px-2.5 py-1 text-secondary-foreground hover:border-primary"
+                      className="rounded-md border border-primary/25 bg-secondary px-2.5 py-1 text-secondary-foreground hover:border-primary"
                     >
                       {c.label}
                     </a>
@@ -318,28 +301,40 @@ export default function Chat() {
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
-      <form onSubmit={send} className="mt-auto flex items-end gap-2 border-t px-5 py-4">
-        <label htmlFor="message" className="sr-only">
-          Your question
-        </label>
-        <textarea
-          id="message"
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          onKeyDown={onKeyDown}
-          onFocus={() => usage === null && loadUsage()}
-          maxLength={MAX_MESSAGE}
-          rows={1}
-          placeholder="Ask about trials or papers"
-          className="min-h-11 flex-1 resize-y rounded-xl border border-input bg-card px-3.5 py-2.5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
-        <Button
-          type="submit"
-          disabled={busy || !message.trim()}
-          className="h-11 rounded-xl px-4 font-semibold"
-        >
-          Send
-        </Button>
+      <form onSubmit={send} className="mt-auto space-y-2 border-t px-5 py-4">
+        <div className="flex items-end gap-2">
+          <label htmlFor="message" className="sr-only">
+            Your question
+          </label>
+          <textarea
+            id="message"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={onKeyDown}
+            onFocus={() => usage === null && loadUsage()}
+            maxLength={MAX_MESSAGE}
+            rows={1}
+            placeholder="Ask about trials or papers"
+            className="min-h-11 flex-1 resize-y rounded-xl border border-input bg-card px-3.5 py-2.5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+          <Button
+            type="submit"
+            disabled={busy || !message.trim()}
+            className="h-11 rounded-xl px-4 font-semibold"
+          >
+            Send
+          </Button>
+        </div>
+        {turns.length > 0 && (
+          <button
+            type="button"
+            onClick={newConversation}
+            disabled={busy}
+            className="text-[13px] text-primary underline-offset-4 hover:underline disabled:opacity-50"
+          >
+            New conversation
+          </button>
+        )}
       </form>
     </section>
   );
