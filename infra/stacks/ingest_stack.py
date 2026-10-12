@@ -9,8 +9,10 @@ from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_scheduler as scheduler
 from aws_cdk import aws_scheduler_targets as targets
+from aws_cdk import aws_ssm as ssm
 from constructs import Construct
 
+from stacks.backend_stack import BackendStack
 from stacks.data_stack import DB_NAME, DataStack
 from stacks.models import EMBEDDING_MODEL, EXTRACTION_MODEL, PROFILE_REGIONS
 from stacks.ops_stack import OpsStack
@@ -28,6 +30,7 @@ class IngestStack(cdk.Stack):
         construct_id: str,
         *,
         data: DataStack,
+        backend: BackendStack,
         ops: OpsStack,
         **kwargs,
     ) -> None:
@@ -106,6 +109,26 @@ class IngestStack(cdk.Stack):
                     f"inference-profile/us.{EXTRACTION_MODEL}"
                 ],
             )
+        )
+
+        # Corpus counts for the page header. The function overwrites the placeholder after
+        # every successful run; CloudFormation leaves the value alone until this resource
+        # itself changes, which would show the placeholder until the next run.
+        stats = ssm.StringParameter(
+            self,
+            "IndexStats",
+            parameter_name="/glia-nav/index-stats",
+            string_value="{}",
+            description="Trial and paper counts from the last glia-nav ingest, read by the API.",
+        )
+        stats.grant_write(self.function)
+        iam.Policy(
+            self,
+            "ApiReadsIndexStats",
+            roles=[backend.instance_role],
+            statements=[
+                iam.PolicyStatement(actions=["ssm:GetParameter"], resources=[stats.parameter_arn])
+            ],
         )
 
         # 10:00 UTC is 6 a.m. Eastern in summer and 5 a.m. in winter, after both sources

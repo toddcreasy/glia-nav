@@ -20,7 +20,7 @@ data = DataStack(app, "DataStack", env=env)
 backend = BackendStack(app, "BackendStack", data=data, env=env)
 AgentStack(app, "AgentStack", backend=backend, ops=ops, env=env)
 FrontendStack(app, "FrontendStack", backend=backend, env=env)
-IngestStack(app, "IngestStack", data=data, ops=ops, env=env)
+IngestStack(app, "IngestStack", data=data, backend=backend, ops=ops, env=env)
 
 cdk.Tags.of(app).add("project", "glia-nav")
 cdk.Tags.of(app).add("env", ENV)

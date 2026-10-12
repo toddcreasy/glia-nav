@@ -1,14 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
 
 type Tab = "search" | "ask";
 
+type IndexStats = { trials: number; papers: number; updated_at: string };
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const UPDATED = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "America/New_York",
+});
+
 export default function Page() {
   const [tab, setTab] = useState<Tab>("search");
+  const [stats, setStats] = useState<IndexStats | null>(null);
+
+  // The daily ingest publishes these. Until it has, the line stays hidden.
+  useEffect(() => {
+    fetch(`${API_URL}/stats`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   // A public demo: no sign-in. The API bounds chat spend with a daily token limit.
   return (
@@ -73,6 +91,14 @@ export default function Page() {
               </Button>
             ))}
           </nav>
+
+          {stats && (
+            <p className="text-[13px] sm:ml-auto text-muted-foreground tabular-nums">
+              {stats.trials.toLocaleString()} trials ·{" "}
+              {stats.papers.toLocaleString()} papers · updated{" "}
+              {UPDATED.format(new Date(stats.updated_at))}
+            </p>
+          )}
         </div>
       </header>
 
