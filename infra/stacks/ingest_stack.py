@@ -54,7 +54,8 @@ class IngestStack(cdk.Stack):
                 platform=ecr_assets.Platform.LINUX_ARM64,
             ),
             architecture=lambda_.Architecture.ARM_64,
-            memory_size=1024,
+            # Daily runs peaked at 184 MB over the 14 days to 2026-10-12.
+            memory_size=512,
             timeout=cdk.Duration.minutes(15),
             # Every write is an upsert, so a failed day is caught up by the next one.
             # Lambda's default two async retries would only triple a failing run.
