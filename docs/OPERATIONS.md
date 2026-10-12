@@ -88,7 +88,7 @@ out() {
 
 | Stack | Output | What it is |
 |---|---|---|
-| `OpsStack` | `AlertsTopicArn` | SNS topic carrying budget notifications and all three alarms |
+| `OpsStack` | `AlertsTopicArn` | SNS topic carrying budget notifications and all four alarms |
 | `OpsStack` | `GitHubActionsRoleArn` | The role CI assumes |
 | `DataStack` | `ClusterArn`, `DatabaseSecretArn`, `DatabaseName` | Data API connection triple |
 | `DataStack` | `DocumentsBucketName` | Documents bucket |
@@ -205,11 +205,12 @@ a 512-number vector, and the Data API rejects responses over 1 MB.
 **Dashboard.** `glia-nav-agent` in CloudWatch: invocations, errors (user, system, throttles), p50 and
 p99 latency, and daily token counts stacked by input and output.
 
-**Alarms.** All three publish to the `glia-nav-alerts` SNS topic, which emails the maintainer.
+**Alarms.** All four publish to the `glia-nav-alerts` SNS topic, which emails the maintainer.
 
 | Alarm | Fires when | Read it as |
 |---|---|---|
 | `glia-nav-agent-errors` | Any runtime error in a 5 minute window | Something broke. Check the application log group. |
+| `glia-nav-agent-activity` | Any agent invocation in an hour | Someone is using the demo. Informational; one email per visit, since alarms notify on state change. |
 | `glia-nav-agent-daily-tokens` | More than 200,000 tokens in a day | Something is looping. Dev usage is a handful of runs. |
 | `glia-nav-ingest-errors` | The daily ingest raised an error | One source failed. The Lambda log names it; the next day's run catches up. |
 
