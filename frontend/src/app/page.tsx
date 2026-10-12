@@ -44,7 +44,7 @@ export default function Page() {
             </svg>
             <div className="flex flex-col leading-tight">
               <h1 className="font-serif text-xl font-semibold tracking-tight">
-                glia-nav
+                GliaNav
               </h1>
               <p className="text-[13px] text-muted-foreground">
                 Glioblastoma trials and research, in plain language

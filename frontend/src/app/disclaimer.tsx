@@ -7,7 +7,7 @@ export default function Disclaimer() {
     <footer className="border-t bg-card">
       <div className="mx-auto max-w-[1120px] space-y-2 px-6 py-4 text-[13px] text-muted-foreground">
         <p>
-          glia-nav is for research use only. It is not medical advice, and nothing here should be
+          GliaNav is for research use only. It is not medical advice, and nothing here should be
           used to make treatment decisions. Talk to your care team.
         </p>
         <p className="flex flex-wrap gap-x-3 gap-y-1">
