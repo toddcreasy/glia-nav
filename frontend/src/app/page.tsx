@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
+import ThemeToggle from "./theme-toggle";
 
 type IndexStats = { trials: number; papers: number; updated_at: string };
 
@@ -67,32 +67,16 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Search and chat sit side by side on wide screens; on a phone these jump down. */}
-          <nav aria-label="Sections" className="flex gap-1">
-            {(
-              [
-                ["#search", "Search"],
-                ["#ask", "Ask the navigator"],
-              ] as const
-            ).map(([href, label]) => (
-              <Button
-                key={href}
-                asChild
-                variant="ghost"
-                className="text-[15px] font-normal text-muted-foreground"
-              >
-                <a href={href}>{label}</a>
-              </Button>
-            ))}
-          </nav>
-
-          {stats && (
-            <p className="text-[13px] sm:ml-auto text-muted-foreground tabular-nums">
-              {stats.trials.toLocaleString()} trials ·{" "}
-              {stats.papers.toLocaleString()} papers · updated{" "}
-              {UPDATED.format(new Date(stats.updated_at))}
-            </p>
-          )}
+          <div className="ml-auto flex items-center gap-3">
+            {stats && (
+              <p className="text-[13px] text-muted-foreground tabular-nums">
+                {stats.trials.toLocaleString()} trials ·{" "}
+                {stats.papers.toLocaleString()} papers · updated{" "}
+                {UPDATED.format(new Date(stats.updated_at))}
+              </p>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 

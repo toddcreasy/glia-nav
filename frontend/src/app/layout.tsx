@@ -28,8 +28,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${publicSans.variable} ${sourceSerif.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Runs before first paint: the saved choice, else the system setting. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <main className="flex-1">{children}</main>
         <Disclaimer />

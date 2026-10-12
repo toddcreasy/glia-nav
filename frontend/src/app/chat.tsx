@@ -62,6 +62,78 @@ function AgentText({ text }: { text: string }) {
   );
 }
 
+// The prompt asks for no dashes; this catches any that slip through. A dash between numbers
+// is a range, anywhere else it joins clauses.
+function tidy(text: string) {
+  return text
+    .replace(/(\d)\s*[\u2013\u2014]\s*(\d)/g, "$1 to $2")
+    .replace(/\s*[\u2013\u2014]\s*/g, ", ");
+}
+
+type Block = { kind: "p" | "ol" | "ul"; lines: string[]; start?: number };
+
+const ORDERED = /^\s*(\d+)[.)]\s+/;
+const BULLET = /^\s*[-*\u2022]\s+/;
+
+// Answers are Markdown-ish: paragraphs, numbered or bulleted lists (often with blank lines
+// between items), and the odd heading. Lists become real lists; the rest stays plain text.
+function blocks(text: string): Block[] {
+  const out: Block[] = [];
+  let blank = true;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/^#+\s*/, "").trimEnd();
+    const last = out.at(-1);
+    if (!line.trim()) {
+      blank = true;
+      continue;
+    }
+    const ordered = line.match(ORDERED);
+    const kind = ordered ? "ol" : BULLET.test(line) ? "ul" : "p";
+    const item = line.replace(ordered ? ORDERED : BULLET, "");
+    if (kind !== "p") {
+      if (last?.kind === kind) last.lines.push(item);
+      else out.push({ kind, lines: [item], start: ordered ? Number(ordered[1]) : undefined });
+    } else if (last && !blank) {
+      // A wrapped line continues whatever came before it, list item or paragraph.
+      last.lines[last.lines.length - 1] += ` ${line.trim()}`;
+    } else {
+      out.push({ kind: "p", lines: [line.trim()] });
+    }
+    blank = false;
+  }
+  return out;
+}
+
+function Answer({ text }: { text: string }) {
+  return (
+    <div className="space-y-3 leading-relaxed">
+      {blocks(tidy(text)).map((block, i) => {
+        if (block.kind === "p") {
+          return (
+            <p key={i}>
+              <AgentText text={block.lines[0]} />
+            </p>
+          );
+        }
+        const List = block.kind;
+        return (
+          <List
+            key={i}
+            start={block.start}
+            className={`space-y-2 pl-5 ${List === "ol" ? "list-decimal" : "list-disc"}`}
+          >
+            {block.lines.map((line, j) => (
+              <li key={j} className="pl-1">
+                <AgentText text={line} />
+              </li>
+            ))}
+          </List>
+        );
+      })}
+    </div>
+  );
+}
+
 function citations(text: string) {
   return [...new Set(text.match(CITATION) ?? [])].map((match) =>
     match.startsWith("NCT")
@@ -257,16 +329,7 @@ export default function Chat() {
           ) : (
             <div key={i} className="space-y-3">
               {turn.steps && turn.steps.length > 0 && <Steps steps={turn.steps} live={false} />}
-              <div className="space-y-3 leading-relaxed">
-                {turn.text
-                  .split(/\n\s*\n/)
-                  .filter((paragraph) => paragraph.trim())
-                  .map((paragraph, j) => (
-                    <p key={j} className="whitespace-pre-wrap">
-                      <AgentText text={paragraph.trim()} />
-                    </p>
-                  ))}
-              </div>
+              <Answer text={turn.text} />
               {citations(turn.text).length > 0 && (
                 <div className="flex flex-wrap gap-1.5 font-mono text-[13px]">
                   {citations(turn.text).map((c) => (
