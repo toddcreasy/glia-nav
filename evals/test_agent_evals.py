@@ -23,10 +23,25 @@ pytestmark = pytest.mark.evals
 CASE_TIMEOUT_S = 180
 
 
+# Set once a case stalls; evals/conftest.py then ends the process instead of waiting on it.
+stalled = False
+
+
+def thread_stacks(skip: int) -> str:
+    """Every thread's stack but the caller's. Strands runs the agent on its own executor
+    thread and the MCP client on another, so the worker's stack alone ends at a wait."""
+    names = {t.ident: t.name for t in threading.enumerate()}
+    return "".join(
+        f"--- thread {names.get(ident, ident)}\n" + "".join(traceback.format_stack(frame))
+        for ident, frame in sys._current_frames().items()
+        if ident != skip
+    )
+
+
 def within(seconds: float, call: Callable[[], AgentReply]) -> AgentReply:
-    """call's result, or TimeoutError once seconds pass. The call runs on a daemon thread,
-    so one that never returns cannot keep pytest from exiting. The error carries the
-    stalled thread's stack, the only record of where the call was waiting."""
+    """call's result, or TimeoutError once seconds pass. The error carries every thread's
+    stack, the only record of where the call was waiting."""
+    global stalled
     outcome: queue.Queue = queue.Queue()
 
     def run() -> None:
@@ -40,9 +55,9 @@ def within(seconds: float, call: Callable[[], AgentReply]) -> AgentReply:
     try:
         ok, value = outcome.get(timeout=seconds)
     except queue.Empty:
-        frame = sys._current_frames().get(worker.ident)
-        stack = "".join(traceback.format_stack(frame)) if frame else "(thread gone)\n"
-        raise TimeoutError(f"no answer in {seconds:g} s; stalled at:\n{stack}") from None
+        stalled = True
+        stacks = thread_stacks(skip=threading.get_ident())
+        raise TimeoutError(f"no answer in {seconds:g} s; threads:\n{stacks}") from None
     if not ok:
         raise value
     return value
