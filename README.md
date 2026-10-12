@@ -78,7 +78,7 @@ choice, plus the tradeoffs, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | **ECR** | Stores both container images | Where the CDK Docker asset lands. App Runner and AgentCore both pull from it. |
 | **Cognito** | User pool for `/me` and the Gateway's client-credentials client | The site has no accounts: `/search` and `/chat` take no token. 12 character password policy, token revocation. |
 | **Amplify Hosting** | Serves the static Next.js export | CDN hosting plus the rewrite rule that proxies `/api/*` to App Runner, which is what removes the need for a CORS layer. |
-| **Amazon Bedrock** | Model inference | Claude models on AWS-managed infrastructure, invoked through `us.` inference profiles. IAM policies pin invocation to six model IDs and nothing else. |
+| **Amazon Bedrock** | Model inference | Claude models on AWS-managed infrastructure, invoked through `us.` inference profiles. IAM policies pin invocation to three models (Haiku 4.5, Sonnet 4.6, Opus 4.6) and nothing else. |
 | **Bedrock Guardrails** | Safety policy on agent input and output | Anonymises names, emails, phone numbers, addresses, and ages; blocks SSN and card numbers. Applied by the service, so it cannot be prompted away. |
 | **Bedrock AgentCore Runtime** | Hosts the Strands agent | Serverless agent hosting with session isolation and OTEL tracing built in. No container platform to run for a workload measured in a handful of invocations a day. |
 | **AgentCore Gateway** | Publishes backend endpoints to the agent as MCP tools | One OpenAPI target becomes an MCP tool server with SigV4 inbound auth, so tool access is an IAM decision rather than a shared token. |
@@ -105,11 +105,12 @@ the failures worth knowing about in advance.
 ```
 .
 ├── src/glia_nav/          Application code. The only thing that ships.
-│   ├── api/               FastAPI app: /health, /health/db, /me
+│   ├── api/               FastAPI app: /search, /chat, /usage, /me, /health, /health/db
 │   ├── agents/            Strands agent (agent.py) and its AgentCore entrypoint (server.py)
+│   ├── ingest/            Daily Lambda: ClinicalTrials.gov and PubMed pulls, eligibility extraction, embeddings
 │   ├── config.py          pydantic-settings; Settings for the API, AgentSettings for the agent
 │   └── logging_config.py  JSON formatter, so `extra={...}` fields become CloudWatch metric filters
-├── infra/                 CDK app: app.py wires five stacks from stacks/
+├── infra/                 CDK app: app.py wires six stacks from stacks/
 ├── migrations/            Alembic versioned schema changes, run over the Data API
 ├── frontend/              Next.js + Tailwind, static export, public demo, no sign-in
 ├── evals/                 Golden set for the agent. Hits Bedrock, so it costs money and is slow.
