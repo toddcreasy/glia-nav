@@ -549,7 +549,21 @@ class AgentStack(cdk.Stack):
             comparison_operator=cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
             treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
         )
-        for alarm in (error_alarm, token_alarm):
+        # Tells the maintainer someone is using the public demo. Alarms notify on state
+        # change only, so a visit of several turns sends one email, and the next one comes
+        # after a quiet hour.
+        activity_alarm = cw.Alarm(
+            self,
+            "ActivityAlarm",
+            alarm_name="glia-nav-agent-activity",
+            alarm_description="Someone is chatting with the glia-nav agent.",
+            metric=self.runtime.metric_invocations(period=cdk.Duration.hours(1)),
+            threshold=1,
+            evaluation_periods=1,
+            comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        for alarm in (error_alarm, token_alarm, activity_alarm):
             alarm.add_alarm_action(cw_actions.SnsAction(ops.alerts_topic))
 
         cw.Dashboard(
