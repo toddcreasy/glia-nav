@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from strands import Agent, tool
 from strands.hooks import AfterToolCallEvent, BeforeToolCallEvent
 from strands.models.bedrock import BedrockModel
+from strands.tools.executors import SequentialToolExecutor
 from strands.tools.mcp import MCPClient
 
 from glia_nav.config import AgentSettings, get_agent_settings
@@ -283,6 +284,10 @@ def build_agent(settings: AgentSettings | None = None) -> Agent:
         # The cache point caches everything before it: the system prompt.
         system_prompt=[{"text": SYSTEM_PROMPT}, {"cachePoint": {"type": "default"}}],
         tools=[current_time, *gateway.list_tools_sync()],
+        # The default runs a turn's tool calls concurrently over the one MCP session. Two
+        # deploys on 2026-10-12 stalled for good right after a parallel pair of searches
+        # that the API had answered; one at a time costs about a second per pair.
+        tool_executor=SequentialToolExecutor(),
         structured_output_model=AgentAnswer,
         # Default handler prints the stream to stdout, which would break JSON logging.
         callback_handler=None,
