@@ -48,6 +48,21 @@ class OpsStack(cdk.Stack):
                 conditions={"StringEquals": {"aws:SourceAccount": self.account}},
             )
         )
+        # So do CloudWatch alarms. Once the topic has a resource policy, the account-wide
+        # default is gone, and alarm actions failed with "not authorized" until this was added.
+        self.alerts_topic.add_to_resource_policy(
+            iam.PolicyStatement(
+                actions=["sns:Publish"],
+                principals=[iam.ServicePrincipal("cloudwatch.amazonaws.com")],
+                resources=[self.alerts_topic.topic_arn],
+                conditions={
+                    "StringEquals": {"aws:SourceAccount": self.account},
+                    "ArnLike": {
+                        "aws:SourceArn": f"arn:aws:cloudwatch:{self.region}:{self.account}:alarm:*"
+                    },
+                },
+            )
+        )
 
         budgets.CfnBudget(
             self,
