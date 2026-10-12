@@ -54,22 +54,14 @@ export default function Page() {
 
           <div className="ml-auto flex items-center gap-1">
             <a
-              href="https://github.com/toddcreasy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mr-2 text-[13px] text-muted-foreground hover:text-foreground"
-            >
-              Built by <span className="font-medium text-foreground">Todd Creasy</span>
-            </a>
-            <span aria-hidden="true" className="mr-2 h-4 w-px bg-border" />
-            <a
               href="https://pilotbio.io"
               target="_blank"
               rel="noopener noreferrer"
-              className="mr-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground hover:opacity-80"
+              title="PilotBio"
+              className="mr-2 flex items-center gap-1.5 text-[13px] font-medium text-foreground hover:opacity-80"
             >
               <PilotBioMark />
-              PilotBio
+              Todd Creasy
             </a>
             <Button asChild variant="ghost" size="icon" className="text-muted-foreground">
               <a
