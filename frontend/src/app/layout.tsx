@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "glia-nav",
+  title: "GliaNav",
   description:
     "An LLM-assisted navigator for glioblastoma clinical trials and research literature.",
 };

@@ -1,30 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import Chat from "./chat";
 import Search from "./search";
+import GitHubMark from "./github-mark";
+import PilotBioMark from "./pilotbio-mark";
 import ThemeToggle from "./theme-toggle";
 
-type IndexStats = { trials: number; papers: number; updated_at: string };
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-const UPDATED = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "America/New_York",
-});
+const REPO = "https://github.com/toddcreasy/glia-nav";
 
 export default function Page() {
-  const [stats, setStats] = useState<IndexStats | null>(null);
-
-  // The daily ingest publishes these. Until it has, the line stays hidden.
-  useEffect(() => {
-    fetch(`${API_URL}/stats`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setStats)
-      .catch(() => {});
-  }, []);
-
   // A public demo: no sign-in. The API bounds chat spend with a daily token limit.
   return (
     <>
@@ -59,7 +44,7 @@ export default function Page() {
             </svg>
             <div className="flex flex-col leading-tight">
               <h1 className="font-serif text-xl font-semibold tracking-tight">
-                glia-nav
+                GliaNav
               </h1>
               <p className="text-[13px] text-muted-foreground">
                 Glioblastoma trials and research, in plain language
@@ -67,14 +52,28 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
-            {stats && (
-              <p className="text-[13px] text-muted-foreground tabular-nums">
-                {stats.trials.toLocaleString()} trials ·{" "}
-                {stats.papers.toLocaleString()} papers · updated{" "}
-                {UPDATED.format(new Date(stats.updated_at))}
-              </p>
-            )}
+          <div className="ml-auto flex items-center gap-1">
+            <a
+              href="https://pilotbio.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="PilotBio"
+              className="mr-2 flex items-center gap-1.5 text-[13px] font-medium text-foreground hover:opacity-80"
+            >
+              <PilotBioMark />
+              Todd Creasy
+            </a>
+            <Button asChild variant="ghost" size="icon" className="text-muted-foreground">
+              <a
+                href={REPO}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Source code on GitHub"
+                title="Source code on GitHub"
+              >
+                <GitHubMark />
+              </a>
+            </Button>
             <ThemeToggle />
           </div>
         </div>
