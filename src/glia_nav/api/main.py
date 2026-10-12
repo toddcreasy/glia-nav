@@ -20,7 +20,7 @@ from fastapi import status as http_status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from glia_nav.api import search as hybrid
 from glia_nav.config import Settings, get_settings
@@ -131,6 +131,11 @@ def agent_runtime_arn(region: str, parameter: str) -> str:
     return boto3.client("ssm", region_name=region).get_parameter(Name=parameter)["Parameter"][
         "Value"
     ]
+
+
+@lru_cache
+def ssm_client(region: str):
+    return boto3.client("ssm", region_name=region)
 
 
 @lru_cache
@@ -317,9 +322,38 @@ class DbHealth(BaseModel):
     detail: str | None = None
 
 
+class IndexStats(BaseModel):
+    trials: int
+    papers: int
+    updated_at: datetime
+
+
+# The ingest publishes once a day; an hour's staleness costs nothing.
+STATS_TTL_S = 3600
+stats_cache: dict = {}
+
+
 @app.get("/health")
 def health() -> Health:
     return Health(status="ok")
+
+
+@app.get("/stats")
+def index_stats(settings: Annotated[Settings, Depends(get_settings)]) -> IndexStats:
+    """Corpus counts for the page header, as the daily ingest last published them. Read
+    from SSM, so loading the page never resumes the database."""
+    if time.monotonic() - stats_cache.get("at", float("-inf")) < STATS_TTL_S:
+        return stats_cache["stats"]
+    value = ssm_client(settings.aws_region).get_parameter(Name=settings.index_stats_parameter)[
+        "Parameter"
+    ]["Value"]
+    try:
+        stats = IndexStats.model_validate_json(value)
+    except ValidationError as exc:
+        # The parameter holds a placeholder until the first ingest after it was created.
+        raise HTTPException(http_status.HTTP_503_SERVICE_UNAVAILABLE, "not published yet") from exc
+    stats_cache.update(stats=stats, at=time.monotonic())
+    return stats
 
 
 @app.get("/health/db")

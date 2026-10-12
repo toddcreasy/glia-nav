@@ -292,6 +292,12 @@ class Store:
             {"ids": nct_ids},
         )
 
+    def counts(self) -> dict[str, int]:
+        return self.execute(
+            "SELECT (SELECT count(*) FROM trials) AS trials, "
+            "(SELECT count(*) FROM papers) AS papers"
+        )[0]
+
     def start_run(self, source: str) -> int:
         records = self.execute(
             "INSERT INTO ingest_runs (source, status) VALUES (:source, 'running') RETURNING id",

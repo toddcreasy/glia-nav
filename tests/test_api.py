@@ -126,3 +126,38 @@ def test_search_passes_eligibility_filters(monkeypatch):
     hit = response.json()["trials"][0]
     assert hit["eligibility"]["prior_bevacizumab"] == "excluded"
     assert hit["eligibility"]["idh"] is None
+
+
+class FakeSsm:
+    def __init__(self, value):
+        self.value = value
+        self.reads = 0
+
+    def get_parameter(self, Name):
+        self.reads += 1
+        return {"Parameter": {"Value": self.value}}
+
+
+def test_stats_reads_ssm_once_per_hour(monkeypatch):
+    from glia_nav.api import main
+
+    ssm = FakeSsm('{"trials": 2268, "papers": 62077, "updated_at": "2026-10-12T10:04:00+00:00"}')
+    monkeypatch.setattr(main, "ssm_client", lambda region: ssm)
+    monkeypatch.setattr(main, "stats_cache", {})
+
+    first = client.get("/stats")
+    second = client.get("/stats")
+
+    assert first.status_code == 200
+    assert first.json()["trials"] == 2268
+    assert second.json() == first.json()
+    assert ssm.reads == 1
+
+
+def test_stats_before_first_publish(monkeypatch):
+    from glia_nav.api import main
+
+    monkeypatch.setattr(main, "ssm_client", lambda region: FakeSsm("{}"))
+    monkeypatch.setattr(main, "stats_cache", {})
+
+    assert client.get("/stats").status_code == 503

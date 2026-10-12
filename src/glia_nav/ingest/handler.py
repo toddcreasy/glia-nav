@@ -5,7 +5,9 @@ on purpose: both sources are on the public internet, and Aurora is reached throu
 Data API like everything else, so it needs no network route to the cluster.
 """
 
+import json
 import logging
+from datetime import UTC, datetime
 
 import boto3
 import httpx
@@ -50,4 +52,10 @@ def handler(event, context) -> dict:
     if failed:
         # A raised error marks the invocation failed, which is what the alarm counts.
         raise RuntimeError(f"ingest update failed for {', '.join(failed)}")
+
+    # The page header shows these. Publishing them here keeps page loads off the database.
+    stats = {**store.counts(), "updated_at": datetime.now(UTC).isoformat(timespec="seconds")}
+    boto3.client("ssm", region_name=settings.aws_region).put_parameter(
+        Name=settings.index_stats_parameter, Value=json.dumps(stats), Overwrite=True
+    )
     return results
