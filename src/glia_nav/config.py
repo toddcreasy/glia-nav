@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     agent_runtime_parameter: str = "/glia-nav/agent-runtime-arn"
     # Where FrontendStack publishes the Amplify origin, the one origin CORS allows.
     frontend_origin_parameter: str = "/glia-nav/frontend-origin"
-    # Where the daily ingest publishes corpus counts for the page header.
+    # Where the daily ingest publishes corpus counts for the page footer.
     index_stats_parameter: str = "/glia-nav/index-stats"
 
 

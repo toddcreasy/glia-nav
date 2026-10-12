@@ -53,7 +53,7 @@ def handler(event, context) -> dict:
         # A raised error marks the invocation failed, which is what the alarm counts.
         raise RuntimeError(f"ingest update failed for {', '.join(failed)}")
 
-    # The page header shows these. Publishing them here keeps page loads off the database.
+    # The page footer shows these. Publishing them here keeps page loads off the database.
     stats = {**store.counts(), "updated_at": datetime.now(UTC).isoformat(timespec="seconds")}
     boto3.client("ssm", region_name=settings.aws_region).put_parameter(
         Name=settings.index_stats_parameter, Value=json.dumps(stats), Overwrite=True

@@ -111,7 +111,7 @@ class IngestStack(cdk.Stack):
             )
         )
 
-        # Corpus counts for the page header. The function overwrites the placeholder after
+        # Corpus counts for the page footer. The function overwrites the placeholder after
         # every successful run; CloudFormation leaves the value alone until this resource
         # itself changes, which would show the placeholder until the next run.
         stats = ssm.StringParameter(
