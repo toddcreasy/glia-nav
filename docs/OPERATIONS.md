@@ -165,6 +165,14 @@ aws logs tail /aws/lambda/glia-nav-ingest --follow
 A failed day needs nothing: the next run starts one day before the last successful watermark, and
 every write is an upsert. If one source fails, the other still updates.
 
+The page footer's trial and paper counts come from the SSM parameter `/glia-nav/index-stats`, which
+the Lambda overwrites only after a run in which both sources succeed. The API caches it for an
+hour. To see what the page will show:
+
+```sh
+aws ssm get-parameter --name /glia-nav/index-stats --query Parameter.Value --output text
+```
+
 **Full reload.** Run the backfill locally. It is safe to repeat, and unchanged text is not
 re-embedded, so a repeat costs almost nothing in Titan tokens. The first full load on 2026-09-23
 took 1 hour 44 minutes for papers and 7 minutes for trials.
@@ -232,6 +240,12 @@ must not? Did every cited NCT ID, PMID, and DOI come from that run's search resu
 questions, did one search call pass the filters the question gave, such as `mgmt` and `recurrence`,
 rather than leaving them in the query text? It costs Bedrock tokens, so it is excluded from the default `pytest`
 run and gates `deploy.yml` instead.
+
+Each case gets 180 seconds. A case that runs past that fails with every thread's stack in the
+error, since that is the only record of where it was waiting, and later cases get a fresh agent.
+Once a case has stalled, `evals/conftest.py` ends the process as soon as pytest reports, because
+the stalled call would otherwise hold it open, and the deploy queue with it, until the step
+times out.
 
 ```sh
 uv run pytest evals
