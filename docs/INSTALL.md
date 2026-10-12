@@ -112,8 +112,9 @@ way to probe it, is in [`SETUP.md`](SETUP.md#bedrock-model-access).
 uv run fastapi dev src/glia_nav/api/main.py    # reload on save, docs at /docs
 ```
 
-Three endpoints. `GET /health` is static. `GET /health/db` runs `SELECT 1` through the Data API.
-`GET /me` requires a Cognito ID token as `Authorization: Bearer <token>` and returns the subject
+`GET /search` and `POST /chat` back the two halves of the page, `GET /usage` reports the day's
+chat token budget, and `GET /stats` returns the corpus counts the ingest last published to SSM.
+`GET /health` is static. `GET /health/db` runs `SELECT 1` through the Data API. `GET /me` requires a Cognito ID token as `Authorization: Bearer <token>` and returns the subject
 and email from its claims.
 
 The container is what App Runner actually runs, so build it when you change dependencies or the

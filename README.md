@@ -2,7 +2,7 @@
 
 **Live demo: https://main.d1zp4oaz4g1yvk.amplifyapp.com**
 
-<img src="docs/images/navigator-chat.png" alt="The glia-nav chat tab answering a question about a patient with recurrent, MGMT-unmethylated glioblastoma who has had bevacizumab, with a numbered list of recruiting trials and linked NCT IDs" width="720">
+<img src="docs/images/navigator-chat.png" alt="The GliaNav chat panel answering a question about a patient with recurrent, MGMT-unmethylated glioblastoma who has had bevacizumab, with a numbered list of recruiting trials and linked NCT IDs" width="720">
 
 *Asking the navigator about a patient. Every NCT ID links to ClinicalTrials.gov and came from that
 answer's own search results.*
@@ -14,7 +14,7 @@ scrambling to understand the disease, what treatments exist, and which clinical 
 able to join. The answers are public, but they are spread across ClinicalTrials.gov, PubMed, and
 eligibility criteria written for clinicians, and pulling them together took hours nobody had.
 
-glia-nav is the tool I wanted that week. It searches every glioblastoma trial and paper in one
+GliaNav is the tool I wanted that week. It searches every glioblastoma trial and paper in one
 place, filters trials by what is on a pathology report (IDH and MGMT status, recurrence,
 performance status), and answers plain questions with citations to the trials and papers behind
 them. It is built to be quick and to be kind: it gives the general evidence and leaves decisions
@@ -77,6 +77,7 @@ choice, plus the tradeoffs, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | **App Runner** | Runs the FastAPI backend container | A container URL with TLS, health checks, and autoscaling, with no load balancer or cluster to operate. Pinned to exactly one 0.25 vCPU instance, because uncapped scale-out is the largest budget risk in the account. |
 | **ECR** | Stores both container images | Where the CDK Docker asset lands. App Runner and AgentCore both pull from it. |
 | **Cognito** | User pool for `/me` and the Gateway's client-credentials client | The site has no accounts: `/search` and `/chat` take no token. 12 character password policy, token revocation. |
+| **SSM Parameter Store** | Values one stack publishes for another: the agent runtime ARN, the frontend origin, the corpus counts | Lets the API read what `AgentStack`, `FrontendStack`, and the ingest produce without a stack cycle CloudFormation would reject. The page footer's counts come from here, so loading the page never wakes Aurora. |
 | **Amplify Hosting** | Serves the static Next.js export | CDN hosting plus the rewrite rule that proxies `/api/*` to App Runner, which is what removes the need for a CORS layer. |
 | **Amazon Bedrock** | Model inference | Claude models on AWS-managed infrastructure, invoked through `us.` inference profiles. IAM policies pin invocation to three models (Haiku 4.5, Sonnet 4.6, Opus 4.6) and nothing else. |
 | **Bedrock Guardrails** | Safety policy on agent input and output | Anonymises names, emails, phone numbers, addresses, and ages; blocks SSN and card numbers. Applied by the service, so it cannot be prompted away. |
@@ -105,7 +106,7 @@ the failures worth knowing about in advance.
 ```
 .
 ├── src/glia_nav/          Application code. The only thing that ships.
-│   ├── api/               FastAPI app: /search, /chat, /usage, /me, /health, /health/db
+│   ├── api/               FastAPI app: /search, /chat, /usage, /stats, /me, /health, /health/db
 │   ├── agents/            Strands agent (agent.py) and its AgentCore entrypoint (server.py)
 │   ├── ingest/            Daily Lambda: ClinicalTrials.gov and PubMed pulls, eligibility extraction, embeddings
 │   ├── config.py          pydantic-settings; Settings for the API, AgentSettings for the agent

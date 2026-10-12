@@ -58,7 +58,7 @@ rejects cycles, which shapes more of the layout than it first appears.
 | `BackendStack` | Cognito user pool and client, API image, App Runner service and its roles | `DataStack` |
 | `AgentStack` | Guardrail, AgentCore Gateway and Runtime, alarms, dashboard, online evaluations, X-Ray Transaction Search | `BackendStack`, `OpsStack` |
 | `FrontendStack` | Amplify app, `main` branch, the `/api/*` rewrite rule | `BackendStack` |
-| `IngestStack` | Ingest Lambda (container image), daily EventBridge schedule, error alarm | `DataStack`, `OpsStack` |
+| `IngestStack` | Ingest Lambda (container image), daily EventBridge schedule, error alarm, the `/glia-nav/index-stats` parameter and the API's read grant on it | `DataStack`, `BackendStack`, `OpsStack` |
 
 Every resource is tagged `project=glia-nav`, `env=dev`, `managed-by=cdk` by an app-level aspect in
 `infra/app.py`, so nothing can be created untagged.
@@ -131,10 +131,18 @@ publication year at a time because ESearch will not page past 10,000 ids. The da
 trials by `LastUpdatePostDate`, papers by both entry date and modification date. One source
 failing does not stop the other.
 
+**Corpus counts.** After a run in which both sources succeed, the handler writes the trial and
+paper counts and a timestamp to SSM `/glia-nav/index-stats`. `GET /stats` reads that parameter
+(cached for an hour) and the page footer shows it, so a page load never resumes the database. A
+run with a failed source raises before publishing, which leaves the previous counts in place.
+`IngestStack` creates the parameter with a `{}` placeholder, and `/stats` answers 503 until the
+first run after that overwrites it.
+
 **Why a Lambda outside the VPC.** Both sources are on the public internet and the VPC has no NAT,
 so the function runs without a VPC and reaches Aurora through the Data API like the API does. Its
 role can call the Data API on this cluster, read the database secret, write under `raw/` in the
-documents bucket, and invoke Titan and Haiku 4.5, and nothing else. It is a container image built on the Lambda
+documents bucket, write the `/glia-nav/index-stats` parameter, and invoke Titan and Haiku 4.5, and
+nothing else. It is a container image built on the Lambda
 Python 3.14 base, so compiled dependencies match Lambda's glibc.
 
 **Upstream is unreliable in two ways,** both handled: E-utilities returns sporadic 500s and 429s,
@@ -200,8 +208,16 @@ rejects.
 ## Frontend
 
 Next.js and Tailwind, exported as static files (`output: "export"`) and served by Amplify Hosting.
-One page with two tabs, no sign-in. The site is a public demo; chat spend is bounded instead by a
+One page, search and chat side by side (stacked on a narrow screen), no sign-in. The site is a public demo; chat spend is bounded instead by a
 daily token limit and a per-address rate limit (see `OPERATIONS.md`, Demo limits).
+
+The header names the product GliaNav (`glia-nav` stays the repo and AWS name) and carries a
+light and dark toggle. An inline script in `layout.tsx` sets `data-theme` on `<html>` before first
+paint, from the saved choice or else the system setting, so the page never flashes the wrong
+theme. Buttons, inputs, and badges are shadcn/ui components copied into
+`frontend/src/components/ui`. The footer shows the corpus counts from `GET /stats` (see
+[Ingestion](#ingestion)); chat's remaining-tokens line calls `/usage` only when the chat input
+gets focus, so neither one touches Aurora on page load.
 
 **Search** calls `/search`. Trials link to ClinicalTrials.gov and papers to PubMed, and a paper's
 linked NCT IDs re-run the search for that trial.
@@ -246,7 +262,10 @@ through the rewrite.
 
 **Strands Agents SDK** on **AgentCore Runtime**. The agent (`src/glia_nav/agents/agent.py`) defaults
 to the large model tier (Opus 4.6, `MODEL_LARGE`), sets cache points after the system prompt and
-after the tool definitions, and returns structured output through a Pydantic model.
+after the tool definitions, and returns structured output through a Pydantic model. It runs a
+turn's tool calls one at a time (`SequentialToolExecutor`). The Strands default runs them
+concurrently over the one MCP session, and on 2026-10-12 two deploys stalled for good right after a
+parallel pair of searches the API had already answered. Sequential costs about a second per pair.
 
 **AgentCore Gateway** turns the backend's OpenAPI document into MCP tools. The document is written
 by hand in `AgentStack` rather than pulled from FastAPI, so the `operationId` (which becomes the
