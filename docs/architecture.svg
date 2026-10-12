@@ -16,7 +16,7 @@
 <text x="195" y="168" class="e" text-anchor="start">loads site, /api/*</text>
 </g>
 <g><polyline points="185,236 185,280" fill="none" stroke="#3E4C59" stroke-width="1.5" marker-end="url(#arr)"/>
-<text x="195" y="263" class="e" text-anchor="start">rewrites /api/* to App Runner</text>
+<text x="195" y="263" class="e" text-anchor="start">rewrites /api/*</text>
 </g>
 <g><title>Chat calls App Runner&#x27;s URL under its 120 s limit; Amplify&#x27;s proxy would cut it at 30 s. GET /usage, for the remaining-tokens line, goes the same way. CORS allows this one origin.</title><polyline points="335,146 335,280" fill="none" stroke="#3E4C59" stroke-width="1.5" marker-end="url(#arr)"/>
 <text x="342" y="218" class="e" text-anchor="start">POST /chat</text>
