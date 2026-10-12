@@ -319,9 +319,11 @@ AgentCore publishes invocations, latency, and errors on its own. Token counts it
 metric filters pull `input_tokens` and `output_tokens` off the structured `agent run` line into the
 `glia-nav` namespace. Those feed the dashboard and the daily token alarm.
 
-Two alarms, both to SNS: any runtime error over a 5 minute window, and a daily token total above
-200,000. A day of dev use is a handful of runs, so crossing that means something is looping, not
-that usage grew.
+Three agent alarms, all to SNS: any runtime error over a 5 minute window, a daily token total above
+200,000, and any invocation in the past hour. A day of dev use is a handful of runs, so crossing
+the token line means something is looping, not that usage grew. The activity alarm tells the
+maintainer someone is using the demo; alarms notify on state change only, so a visit of several
+turns sends one email. `IngestStack` adds a fourth, on a failed ingest run.
 
 X-Ray Transaction Search at 100 percent indexing moves spans into the `aws/spans` log group, which
 is where AgentCore Evaluations reads them from. Two things about it bite: `CfnTransactionSearchConfig`

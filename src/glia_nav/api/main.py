@@ -340,7 +340,7 @@ def health() -> Health:
 
 @app.get("/stats")
 def index_stats(settings: Annotated[Settings, Depends(get_settings)]) -> IndexStats:
-    """Corpus counts for the page header, as the daily ingest last published them. Read
+    """Corpus counts for the page footer, as the daily ingest last published them. Read
     from SSM, so loading the page never resumes the database."""
     if time.monotonic() - stats_cache.get("at", float("-inf")) < STATS_TTL_S:
         return stats_cache["stats"]
