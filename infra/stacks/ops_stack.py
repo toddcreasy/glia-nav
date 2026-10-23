@@ -263,13 +263,15 @@ class OpsStack(cdk.Stack):
         )
         traffic_token.grant_read(traffic_function)
         traffic_topic.grant_publish(traffic_function)
-        # 12:00 UTC is 8 a.m. Eastern in summer and 7 a.m. in winter.
+        # 7 a.m. Eastern all year: the schedule follows daylight saving time.
         scheduler.Schedule(
             self,
             "TrafficDaily",
             schedule_name="glia-nav-github-traffic-daily",
             description="Snapshot the glia-nav GitHub repo traffic once a day.",
-            schedule=scheduler.ScheduleExpression.cron(minute="0", hour="12"),
+            schedule=scheduler.ScheduleExpression.cron(
+                minute="0", hour="7", time_zone=cdk.TimeZone.AMERICA_NEW_YORK
+            ),
             target=targets.LambdaInvoke(traffic_function, retry_attempts=0),
         )
         cw.Alarm(
