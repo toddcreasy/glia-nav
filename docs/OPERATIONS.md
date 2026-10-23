@@ -283,9 +283,10 @@ If a budget alarm fires, stop feature work and find the line item before continu
 ## Repo traffic
 
 GitHub keeps repo views and clones for 14 days. The `glia-nav-github-traffic` Lambda in OpsStack runs
-at 12:00 UTC, writes the raw API response to `snapshots/<date>.json` in the `TrafficBucketName` bucket,
-merges the daily counts into `history.json` there, and emails a summary to the `TRAFFIC_EMAIL` address
-through the `glia-nav-traffic` SNS topic. The address must confirm the SNS subscription once.
+at 7:00 a.m. America/New_York, following daylight saving time. It writes the raw API response to
+`snapshots/<date>.json` in the `TrafficBucketName` bucket, merges the daily counts into
+`history.json` there, and emails a summary to the `TRAFFIC_EMAIL` address through the
+`glia-nav-traffic` SNS topic. The address must confirm the SNS subscription once.
 
 The traffic API needs a fine-grained PAT scoped to this repo with Administration read. It lives in the
 `glia-nav/github-traffic-token` secret. CloudFormation creates that secret with a random value, so
