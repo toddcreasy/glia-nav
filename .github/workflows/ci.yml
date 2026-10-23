@@ -19,6 +19,8 @@ env:
   # OpsStack subscribes this address to budget and alarm alerts. A secret, not a variable:
   # the repo is public, and Actions logs print variables.
   ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+  # The daily GitHub traffic email goes here. A secret for the same reason.
+  TRAFFIC_EMAIL: ${{ secrets.TRAFFIC_EMAIL }}
 
 jobs:
   python:
