@@ -1,8 +1,17 @@
 import os
+import pathlib
 
 import aws_cdk as cdk
 from aws_cdk import aws_budgets as budgets
+from aws_cdk import aws_cloudwatch as cw
+from aws_cdk import aws_cloudwatch_actions as cw_actions
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_scheduler as scheduler
+from aws_cdk import aws_scheduler_targets as targets
+from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as subs
 from constructs import Construct
@@ -19,6 +28,8 @@ GITHUB_OWNER_ID = 5910177
 # The public repo, created 2026-09-25. The earlier private repo, renamed glia-nav-private,
 # is no longer trusted.
 GITHUB_REPO_ID = 1388288500
+TRAFFIC_FUNCTION_NAME = "glia-nav-github-traffic"
+TRAFFIC_CODE = str(pathlib.Path(__file__).resolve().parents[1] / "lambdas" / "github_traffic")
 
 
 class OpsStack(cdk.Stack):
@@ -185,6 +196,95 @@ class OpsStack(cdk.Stack):
             )
         )
 
+        # GitHub keeps repo traffic for 14 days only. A daily snapshot to S3 keeps the history
+        # and emails a summary. The traffic API needs a token with Administration read on the
+        # repo; the Actions GITHUB_TOKEN cannot be granted that. CloudFormation creates the
+        # secret with a random value, and the maintainer replaces it with a fine-grained PAT.
+        traffic_email = os.environ.get("TRAFFIC_EMAIL")
+        if not traffic_email:
+            raise ValueError("Set TRAFFIC_EMAIL to the address the daily traffic email goes to.")
+        traffic_topic = sns.Topic(
+            self,
+            "TrafficTopic",
+            topic_name="glia-nav-traffic",
+            display_name="glia-nav traffic",
+        )
+        traffic_topic.add_subscription(subs.EmailSubscription(traffic_email))
+        traffic_bucket = s3.Bucket(
+            self,
+            "TrafficBucket",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            removal_policy=cdk.RemovalPolicy.RETAIN,
+        )
+        traffic_token = secretsmanager.Secret(
+            self,
+            "GitHubTrafficToken",
+            secret_name="glia-nav/github-traffic-token",
+            description=f"Fine-grained GitHub PAT, Administration read on {GITHUB_REPO}.",
+        )
+        traffic_function = lambda_.Function(
+            self,
+            "TrafficFunction",
+            function_name=TRAFFIC_FUNCTION_NAME,
+            description="Daily snapshot of the glia-nav GitHub repo traffic.",
+            runtime=lambda_.Runtime.PYTHON_3_14,
+            architecture=lambda_.Architecture.ARM_64,
+            handler="index.handler",
+            code=lambda_.Code.from_asset(TRAFFIC_CODE),
+            memory_size=128,
+            timeout=cdk.Duration.minutes(1),
+            retry_attempts=0,
+            log_group=logs.LogGroup(
+                self,
+                "TrafficLogs",
+                log_group_name=f"/aws/lambda/{TRAFFIC_FUNCTION_NAME}",
+                retention=logs.RetentionDays.ONE_MONTH,
+                removal_policy=cdk.RemovalPolicy.DESTROY,
+            ),
+            environment={
+                "GITHUB_REPO": GITHUB_REPO,
+                "BUCKET": traffic_bucket.bucket_name,
+                "TOKEN_SECRET_ARN": traffic_token.secret_arn,
+                "TOPIC_ARN": traffic_topic.topic_arn,
+            },
+        )
+        # ListBucket lets the first run's read of the missing history.json return NoSuchKey
+        # rather than AccessDenied.
+        traffic_function.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject", "s3:PutObject"],
+                resources=[traffic_bucket.arn_for_objects("*")],
+            )
+        )
+        traffic_function.add_to_role_policy(
+            iam.PolicyStatement(actions=["s3:ListBucket"], resources=[traffic_bucket.bucket_arn])
+        )
+        traffic_token.grant_read(traffic_function)
+        traffic_topic.grant_publish(traffic_function)
+        # 12:00 UTC is 8 a.m. Eastern in summer and 7 a.m. in winter.
+        scheduler.Schedule(
+            self,
+            "TrafficDaily",
+            schedule_name="glia-nav-github-traffic-daily",
+            description="Snapshot the glia-nav GitHub repo traffic once a day.",
+            schedule=scheduler.ScheduleExpression.cron(minute="0", hour="12"),
+            target=targets.LambdaInvoke(traffic_function, retry_attempts=0),
+        )
+        cw.Alarm(
+            self,
+            "TrafficErrorAlarm",
+            alarm_name="glia-nav-github-traffic-errors",
+            alarm_description="The daily GitHub traffic snapshot failed. Check the token first.",
+            metric=traffic_function.metric_errors(period=cdk.Duration.hours(1)),
+            threshold=1,
+            evaluation_periods=1,
+            comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        ).add_alarm_action(cw_actions.SnsAction(self.alerts_topic))
+
+        cdk.CfnOutput(self, "TrafficBucketName", value=traffic_bucket.bucket_name)
         cdk.CfnOutput(self, "AlertsTopicArn", value=self.alerts_topic.topic_arn)
         cdk.CfnOutput(self, "GitHubActionsRoleArn", value=self.github_actions_role.role_arn)
 

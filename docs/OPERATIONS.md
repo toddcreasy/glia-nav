@@ -15,7 +15,8 @@ Deploying, watching, and tearing down the running system. Local setup is in
 7. [Observability](#observability)
 8. [Evals](#evals)
 9. [Cost](#cost)
-10. [Teardown](#teardown)
+10. [Repo traffic](#repo-traffic)
+11. [Teardown](#teardown)
 
 ---
 
@@ -278,6 +279,20 @@ Cost allocation tags (`project`, `env`, `managed-by`) were activated on 2026-08-
 retroactive, so per-tag breakdowns begin with September data.
 
 If a budget alarm fires, stop feature work and find the line item before continuing.
+
+## Repo traffic
+
+GitHub keeps repo views and clones for 14 days. The `glia-nav-github-traffic` Lambda in OpsStack runs
+at 12:00 UTC, writes the raw API response to `snapshots/<date>.json` in the `TrafficBucketName` bucket,
+merges the daily counts into `history.json` there, and emails a summary to the `TRAFFIC_EMAIL` address
+through the `glia-nav-traffic` SNS topic. The address must confirm the SNS subscription once.
+
+The traffic API needs a fine-grained PAT scoped to this repo with Administration read. It lives in the
+`glia-nav/github-traffic-token` secret. CloudFormation creates that secret with a random value, so
+paste the token in through the console after the first deploy. When the token expires the run fails
+and `glia-nav-github-traffic-errors` alerts through the budget topic.
+
+Clone counts include every CI checkout and the bots that clone new public repos. Read views, not clones.
 
 ## Teardown
 
