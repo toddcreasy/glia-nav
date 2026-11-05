@@ -125,6 +125,39 @@ def test_eutils_gives_up_after_retries(monkeypatch):
     assert len(calls) == pubmed.RETRIES
 
 
+def test_esearch_retries_a_200_with_no_count(monkeypatch):
+    monkeypatch.setattr(pubmed, "BACKOFF", 0)
+    bodies = iter(
+        [
+            {"esearchresult": {"ERROR": "backend failed"}},
+            {"error": "no result at all"},
+            {"esearchresult": {"count": "1", "idlist": ["7"]}},
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=next(bodies))
+
+    eutils = pubmed.EUtils(httpx.Client(transport=httpx.MockTransport(handler)))
+    eutils.interval = 0
+    assert eutils.search(date(2020, 1, 1), date(2020, 12, 31), "edat") == ["7"]
+
+
+def test_esearch_reports_the_body_when_count_never_comes(monkeypatch):
+    monkeypatch.setattr(pubmed, "BACKOFF", 0)
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(200, json={"esearchresult": {"ERROR": "backend failed"}})
+
+    eutils = pubmed.EUtils(httpx.Client(transport=httpx.MockTransport(handler)))
+    eutils.interval = 0
+    with pytest.raises(RuntimeError, match="backend failed"):
+        eutils.search(date(2020, 1, 1), date(2020, 12, 31), "edat")
+    assert len(calls) == pubmed.RETRIES
+
+
 def test_efetch_retries_truncated_xml(monkeypatch):
     monkeypatch.setattr(pubmed, "BACKOFF", 0)
     bodies = iter(
@@ -303,3 +336,21 @@ def test_reconcile_refuses_mass_deletion(monkeypatch):
     assert store.deleted is None
     assert fetched == []
     assert store.finished[0] == "failed"
+
+
+def test_failed_paper_search_records_a_failed_run():
+    class WatermarkStore(ReconcileStore):
+        def last_watermark(self, source):
+            return date(2026, 11, 4)
+
+    class BrokenEUtils:
+        def search(self, start, end, datetype):
+            raise RuntimeError("no count")
+
+    store = WatermarkStore(set())
+    ingestor = Ingestor(store, bedrock=None, http=None, embedding_model="m", extraction_model="x")
+
+    with pytest.raises(RuntimeError, match="no count"):
+        ingestor.update_papers(BrokenEUtils())
+
+    assert store.finished == ("failed", None)

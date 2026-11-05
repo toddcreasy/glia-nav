@@ -185,10 +185,14 @@ class Ingestor:
         if watermark is None:
             raise RuntimeError("no successful pubmed run yet; run scripts/ingest_backfill.py")
         start, end = watermark - OVERLAP, date.today()
-        pmids = sorted(
-            set(eutils.search(start, end, "edat")) | set(eutils.search(start, end, "mdat"))
-        )
-        return self.run("pubmed", lambda: self.papers(eutils, pmids))
+
+        def work() -> dict:
+            pmids = sorted(
+                set(eutils.search(start, end, "edat")) | set(eutils.search(start, end, "mdat"))
+            )
+            return self.papers(eutils, pmids)
+
+        return self.run("pubmed", work)
 
     def backfill_papers(self, eutils: pubmed.EUtils, first_year: int) -> dict:
         """Every matching paper, one publication year at a time to stay under ESearch's cap."""
