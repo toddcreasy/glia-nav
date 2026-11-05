@@ -62,19 +62,28 @@ class EUtils:
 
     def search(self, start: date, end: date, datetype: str) -> list[str]:
         """PMIDs matching TERM whose `datetype` (edat: added, mdat: modified) is in range."""
-        response = self._post(
-            "esearch.fcgi",
-            {
-                "db": "pubmed",
-                "term": TERM,
-                "datetype": datetype,
-                "mindate": start.strftime("%Y/%m/%d"),
-                "maxdate": end.strftime("%Y/%m/%d"),
-                "retmax": ESEARCH_MAX,
-                "retmode": "json",
-            },
-        )
-        result = response.json()["esearchresult"]
+        # ESearch sometimes answers 200 with no count; that retries like a 5xx.
+        for attempt in range(RETRIES):
+            response = self._post(
+                "esearch.fcgi",
+                {
+                    "db": "pubmed",
+                    "term": TERM,
+                    "datetype": datetype,
+                    "mindate": start.strftime("%Y/%m/%d"),
+                    "maxdate": end.strftime("%Y/%m/%d"),
+                    "retmax": ESEARCH_MAX,
+                    "retmode": "json",
+                },
+            )
+            result = response.json().get("esearchresult", {})
+            if "count" in result:
+                break
+            if attempt == RETRIES - 1:
+                raise RuntimeError(
+                    f"ESearch gave no count for {datetype} {start}..{end}: {response.text[:500]}"
+                )
+            time.sleep(BACKOFF * 2**attempt)
         if int(result["count"]) > ESEARCH_MAX:
             raise ValueError(
                 f"{result['count']} PMIDs for {datetype} {start}..{end}; slice the range smaller"
