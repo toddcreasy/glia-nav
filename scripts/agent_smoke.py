@@ -31,9 +31,18 @@ def main() -> int:
         payload=json.dumps({"prompt": prompt}).encode(),
     )
 
-    body = json.loads(response["response"].read())
-    if "error" in body:
-        print(f"agent returned an error: {body['error']}")
+    # The runtime streams server-sent events: progress lines, then one reply or error.
+    events = [
+        json.loads(line[5:])
+        for line in response["response"].iter_lines()
+        if line.startswith(b"data:")
+    ]
+    for event in events:
+        if event["type"] == "progress":
+            print(f"progress:  {event['text']}")
+    body = events[-1] if events else {"type": "error", "error": "no events in the response"}
+    if body["type"] != "reply":
+        print(f"agent returned an error: {body.get('error')}")
         return 1
 
     reply = AgentReply.model_validate(body)
