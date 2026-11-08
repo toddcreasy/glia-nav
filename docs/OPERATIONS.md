@@ -217,7 +217,10 @@ p99 latency, and daily token counts stacked by input and output.
 
 **Logs.** Both containers emit JSON, and `extra={...}` fields are top level, so Log Insights can
 filter on them directly. The agent's `agent run` line carries model, input and output tokens, cache
-reads and writes, cycles, tools called, stop reason, and latency.
+reads and writes, cycles, tools called, stop reason, `structured_answer`, and latency. A normal
+answer logs `stop_reason: tool_use` with `structured_answer: true`, since the model returns its
+answer by calling the `AgentAnswer` tool. `structured_answer: false` means the turn ended without
+one: a guardrail block (`guardrail_intervened`) or a cutoff (`max_tokens`).
 
 ```sh
 aws logs tail "$(out AgentStack ApplicationLogGroup)" --follow

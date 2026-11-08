@@ -400,7 +400,10 @@ def run_agent(
             "unsourced_ids": len(first_unsourced),
             "rewritten": len(results) > 1,
             "unsourced_dropped": len(unsourced),
+            # A structured answer always stops on tool_use: the model returns it by
+            # calling the AgentAnswer tool, and Strands ends the loop right after.
             "stop_reason": results[-1].stop_reason,
+            "structured_answer": results[-1].structured_output is not None,
             "latency_ms": round((time.monotonic() - started) * 1000),
         },
     )
