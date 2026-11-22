@@ -391,6 +391,20 @@ class AgentStack(cdk.Stack):
             )
         )
 
+        # The us. system profiles can't be tagged. These copies carry the app's project
+        # tag, so the runtime's Bedrock spend lands under glia-nav in Cost Explorer.
+        profiles = {
+            size: bedrock.CfnApplicationInferenceProfile(
+                self,
+                f"{size.capitalize()}ModelProfile",
+                inference_profile_name=f"glia-nav-agent-{size}",
+                model_source=bedrock.CfnApplicationInferenceProfile.InferenceProfileModelSourceProperty(
+                    copy_from=f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/{model}"
+                ),
+            )
+            for size, model in (("small", MODEL_SMALL), ("large", MODEL_LARGE))
+        }
+
         self.runtime = agentcore.Runtime(
             self,
             "Runtime",
@@ -405,8 +419,8 @@ class AgentStack(cdk.Stack):
             # Emits OTEL spans for every model call and tool call.
             tracing_enabled=True,
             environment_variables={
-                "MODEL_SMALL": MODEL_SMALL,
-                "MODEL_LARGE": MODEL_LARGE,
+                "MODEL_SMALL": profiles["small"].attr_inference_profile_arn,
+                "MODEL_LARGE": profiles["large"].attr_inference_profile_arn,
                 "GATEWAY_URL": self.gateway.gateway_url,
                 "GUARDRAIL_ID": guardrail.attr_guardrail_id,
                 "GUARDRAIL_VERSION": guardrail_version.attr_version,
@@ -425,7 +439,8 @@ class AgentStack(cdk.Stack):
                 + [
                     f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/us.{model}"
                     for model in ALLOWED_MODELS
-                ],
+                ]
+                + [profile.attr_inference_profile_arn for profile in profiles.values()],
             )
         )
 

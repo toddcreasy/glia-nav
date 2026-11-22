@@ -280,6 +280,9 @@ def build_agent(settings: AgentSettings | None = None) -> Agent:
         max_tokens=settings.max_output_tokens,
         # Caches the tool definitions, which repeat on every call.
         cache_tools="default",
+        # "auto" keys off "anthropic.claude" in the model ID, which an application
+        # inference profile ARN lacks.
+        include_tool_result_status=True,
         **guardrail,
     )
     agent = Agent(
