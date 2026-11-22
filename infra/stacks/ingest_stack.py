@@ -1,6 +1,7 @@
 import pathlib
 
 import aws_cdk as cdk
+from aws_cdk import aws_bedrock as bedrock
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cloudwatch_actions as cw_actions
 from aws_cdk import aws_ecr_assets as ecr_assets
@@ -44,6 +45,20 @@ class IngestStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
 
+        # A tagged copy of the us. profile, so extraction spend lands under glia-nav in
+        # Cost Explorer.
+        profile = bedrock.CfnApplicationInferenceProfile(
+            self,
+            "ExtractionModelProfile",
+            inference_profile_name="glia-nav-ingest-small",
+            model_source=bedrock.CfnApplicationInferenceProfile.InferenceProfileModelSourceProperty(
+                copy_from=(
+                    f"arn:aws:bedrock:{self.region}:{self.account}:"
+                    f"inference-profile/us.{EXTRACTION_MODEL}"
+                )
+            ),
+        )
+
         # No VPC: both sources are on the public internet and the VPC has no NAT.
         # Aurora is reached through the Data API with this function's IAM role.
         self.function = lambda_.DockerImageFunction(
@@ -70,7 +85,7 @@ class IngestStack(cdk.Stack):
                 "DATABASE_NAME": DB_NAME,
                 "DOCUMENTS_BUCKET": data.documents_bucket.bucket_name,
                 "EMBEDDING_MODEL": EMBEDDING_MODEL,
-                "MODEL_SMALL": f"us.{EXTRACTION_MODEL}",
+                "MODEL_SMALL": profile.attr_inference_profile_arn,
             },
         )
 
@@ -106,7 +121,8 @@ class IngestStack(cdk.Stack):
                 ]
                 + [
                     f"arn:aws:bedrock:{self.region}:{self.account}:"
-                    f"inference-profile/us.{EXTRACTION_MODEL}"
+                    f"inference-profile/us.{EXTRACTION_MODEL}",
+                    profile.attr_inference_profile_arn,
                 ],
             )
         )
