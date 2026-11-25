@@ -8,6 +8,9 @@ from stacks.backend_stack import BackendStack
 
 APP_NAME = "glia-nav"
 BRANCH = "main"
+# Its Route 53 zone is managed in project-template's ops/dns, in this account, so Amplify
+# writes the certificate validation and alias records into it on its own.
+CUSTOM_DOMAIN = "glia-nav.pilotbio.io"
 
 
 class FrontendStack(cdk.Stack):
@@ -50,15 +53,26 @@ class FrontendStack(cdk.Stack):
             stage="PRODUCTION",
         )
 
-        # The one origin the API's CORS allows, for /chat. BackendStack cannot reference
-        # this stack, which already depends on it, so the API reads it from SSM.
+        amplify.CfnDomain(
+            self,
+            "Domain",
+            app_id=self.app.attr_app_id,
+            domain_name=CUSTOM_DOMAIN,
+            sub_domain_settings=[
+                amplify.CfnDomain.SubDomainSettingProperty(prefix="", branch_name=BRANCH)
+            ],
+        ).add_dependency(self.branch)
+
+        # The origins the API's CORS allows, for /chat: the custom domain and the Amplify
+        # URL, which stays live. BackendStack cannot reference this stack, which already
+        # depends on it, so the API reads them from SSM.
         origin = f"https://{BRANCH}.{self.app.attr_default_domain}"
         origin_parameter = ssm.StringParameter(
             self,
             "FrontendOrigin",
             parameter_name="/glia-nav/frontend-origin",
-            string_value=origin,
-            description="Origin of the glia-nav web UI, read by the API for CORS.",
+            string_value=f"https://{CUSTOM_DOMAIN},{origin}",
+            description="Origins of the glia-nav web UI, comma-separated, for CORS.",
         )
         iam.Policy(
             self,
@@ -73,3 +87,4 @@ class FrontendStack(cdk.Stack):
 
         cdk.CfnOutput(self, "AmplifyAppId", value=self.app.attr_app_id)
         cdk.CfnOutput(self, "AmplifyUrl", value=origin)
+        cdk.CfnOutput(self, "SiteUrl", value=f"https://{CUSTOM_DOMAIN}")

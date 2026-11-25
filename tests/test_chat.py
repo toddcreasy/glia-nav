@@ -169,31 +169,59 @@ def test_chat_waits_for_a_resuming_database(runtime, rds, monkeypatch):
     assert len(runtime.calls) == 1
 
 
-FRONTEND = "https://main.example.amplifyapp.com"
+FRONTENDS = ["https://glia-nav.example.com", "https://main.example.amplifyapp.com"]
 
 
-def test_chat_preflight_allows_the_frontend_origin(monkeypatch):
-    monkeypatch.setattr(main, "frontend_origin", lambda region, parameter: FRONTEND)
+@pytest.mark.parametrize("origin", FRONTENDS)
+def test_chat_preflight_allows_each_frontend_origin(monkeypatch, origin):
+    monkeypatch.setattr(main, "frontend_origins", lambda region, parameter: FRONTENDS)
     response = client.options(
         "/chat",
         headers={
-            "Origin": FRONTEND,
+            "Origin": origin,
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "authorization,content-type",
         },
     )
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == FRONTEND
+    assert response.headers["access-control-allow-origin"] == origin
 
 
 def test_chat_preflight_refuses_other_origins(monkeypatch):
-    monkeypatch.setattr(main, "frontend_origin", lambda region, parameter: FRONTEND)
+    monkeypatch.setattr(main, "frontend_origins", lambda region, parameter: FRONTENDS)
     response = client.options(
         "/chat",
         headers={"Origin": "https://evil.example.com", "Access-Control-Request-Method": "POST"},
     )
     assert response.status_code == 400
     assert "access-control-allow-origin" not in response.headers
+
+
+class FakeSsm:
+    def __init__(self, value):
+        self.value = value
+        self.calls = 0
+
+    def get_parameter(self, Name):
+        self.calls += 1
+        return {"Parameter": {"Value": self.value}}
+
+
+def test_frontend_origins_pick_up_a_changed_parameter(monkeypatch):
+    ssm = FakeSsm("https://main.example.amplifyapp.com")
+    clock = [1000.0]
+    monkeypatch.setattr(main, "ssm_client", lambda region: ssm)
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(main, "_origins", {})
+
+    assert main.frontend_origins("us-east-1", "/p") == ["https://main.example.amplifyapp.com"]
+    ssm.value = ",".join(FRONTENDS)
+    clock[0] += 60
+    assert main.frontend_origins("us-east-1", "/p") == ["https://main.example.amplifyapp.com"]
+    assert ssm.calls == 1
+    clock[0] += main.ORIGINS_TTL_S
+    assert main.frontend_origins("us-east-1", "/p") == FRONTENDS
+    assert ssm.calls == 2
 
 
 def test_reset_is_the_next_midnight_eastern():

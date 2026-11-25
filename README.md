@@ -1,6 +1,6 @@
 # GliaNav
 
-**Live demo: https://main.d1zp4oaz4g1yvk.amplifyapp.com**
+**Live demo: https://glia-nav.pilotbio.io**
 
 <img src="docs/images/navigator-chat.png" alt="The GliaNav chat panel answering a question about a patient with recurrent, MGMT-unmethylated glioblastoma who has had bevacizumab, with a numbered list of recruiting trials and linked NCT IDs" width="720">
 

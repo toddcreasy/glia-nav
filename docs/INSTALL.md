@@ -165,8 +165,8 @@ npm run dev          # http://localhost:3000
 `frontend/.env.local` needs `NEXT_PUBLIC_API_URL=http://localhost:8000` if the API is running
 locally too. Deployed, search calls `/api/*` on its own origin and Amplify rewrites that to App
 Runner. Chat calls App Runner directly (`NEXT_PUBLIC_CHAT_API_URL`), because that proxy times out
-at 30 s; the API's CORS allows only the origin `FrontendStack` publishes to SSM
-`/glia-nav/frontend-origin`.
+at 30 s; the API's CORS allows only the origins `FrontendStack` publishes to SSM
+`/glia-nav/frontend-origin`: the custom domain and the Amplify URL.
 
 No sign-in, locally or deployed. The site is a public demo; `/search` and `/chat` take no token.
 

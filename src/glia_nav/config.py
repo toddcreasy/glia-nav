@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     daily_token_limit: int = 150_000
     # Where AgentStack publishes the runtime ARN; BackendStack cannot reference it.
     agent_runtime_parameter: str = "/glia-nav/agent-runtime-arn"
-    # Where FrontendStack publishes the Amplify origin, the one origin CORS allows.
+    # Where FrontendStack publishes the origins CORS allows, comma-separated.
     frontend_origin_parameter: str = "/glia-nav/frontend-origin"
     # Where the daily ingest publishes corpus counts for the page footer.
     index_stats_parameter: str = "/glia-nav/index-stats"
