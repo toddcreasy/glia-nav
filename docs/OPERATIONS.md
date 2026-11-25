@@ -100,7 +100,7 @@ out() {
 | `AgentStack` | `AgentRuntimeArn`, `AgentRuntimeId` | For `scripts/agent_smoke.py` |
 | `AgentStack` | `GuardrailId`, `GuardrailVersion` | The guardrail and the version the runtime uses |
 | `AgentStack` | `ApplicationLogGroup` | Where the agent's JSON logs land |
-| `FrontendStack` | `AmplifyAppId`, `AmplifyUrl` | The deployed site |
+| `FrontendStack` | `AmplifyAppId`, `AmplifyUrl`, `SiteUrl` | The deployed site; `SiteUrl` is the custom domain |
 | `IngestStack` | `FunctionName` | The daily ingest Lambda |
 
 ## Users

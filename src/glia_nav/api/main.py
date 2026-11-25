@@ -34,7 +34,7 @@ app = FastAPI(title="glia-nav API", version="0.1.0")
 
 
 class FrontendOriginCORS(CORSMiddleware):
-    """Allows the one frontend origin, which FrontendStack publishes to SSM.
+    """Allows the frontend origins, which FrontendStack publishes to SSM.
 
     Search goes through Amplify's /api/* rewrite and stays same-origin. /chat cannot:
     that proxy cuts requests off at 30 s and an agent turn can run longer, so the
@@ -44,7 +44,7 @@ class FrontendOriginCORS(CORSMiddleware):
 
     def is_allowed_origin(self, origin: str) -> bool:
         settings = get_settings()
-        return origin == frontend_origin(settings.aws_region, settings.frontend_origin_parameter)
+        return origin in frontend_origins(settings.aws_region, settings.frontend_origin_parameter)
 
 
 app.add_middleware(
@@ -139,10 +139,12 @@ def ssm_client(region: str):
 
 
 @lru_cache
-def frontend_origin(region: str, parameter: str) -> str:
-    return boto3.client("ssm", region_name=region).get_parameter(Name=parameter)["Parameter"][
-        "Value"
-    ]
+def frontend_origins(region: str, parameter: str) -> list[str]:
+    return (
+        boto3.client("ssm", region_name=region)
+        .get_parameter(Name=parameter)["Parameter"]["Value"]
+        .split(",")
+    )
 
 
 # Aurora takes up to a minute to resume, and App Runner cuts a request off at 120 s.

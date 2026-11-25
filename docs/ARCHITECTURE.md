@@ -57,7 +57,7 @@ rejects cycles, which shapes more of the layout than it first appears.
 | `DataStack` | VPC, Aurora Serverless v2 cluster, generated DB secret, documents bucket | nothing |
 | `BackendStack` | Cognito user pool and client, API image, App Runner service and its roles | `DataStack` |
 | `AgentStack` | Guardrail, AgentCore Gateway and Runtime, alarms, dashboard, online evaluations, X-Ray Transaction Search | `BackendStack`, `OpsStack` |
-| `FrontendStack` | Amplify app, `main` branch, the `/api/*` rewrite rule | `BackendStack` |
+| `FrontendStack` | Amplify app, `main` branch, the `/api/*` rewrite rule, the `glia-nav.pilotbio.io` domain | `BackendStack` |
 | `IngestStack` | Ingest Lambda (container image), daily EventBridge schedule, error alarm, the `/glia-nav/index-stats` parameter and the API's read grant on it | `DataStack`, `BackendStack`, `OpsStack` |
 
 Every resource is tagged `project=glia-nav`, `env=dev`, `managed-by=cdk` by an app-level aspect in
@@ -253,8 +253,9 @@ Amplify's `/api/*` rewrite proxy cuts a request off at 30 s, with no setting to 
 turn can take 40 s, and longer while Aurora wakes, so on 2026-09-24 a 41.8 s answer reached the
 browser as a 504 after the API had returned it. Chat therefore calls the App Runner URL
 (`NEXT_PUBLIC_CHAT_API_URL`, from CI) directly, under App Runner's 120 s limit. The API's CORS
-middleware allows one origin, GET and POST, and the `Authorization` and `Content-Type` headers.
-`FrontendStack` publishes that origin to SSM `/glia-nav/frontend-origin`, because `BackendStack`
+middleware allows two origins, GET and POST, and the `Authorization` and `Content-Type` headers.
+The origins are the custom domain, `glia-nav.pilotbio.io`, and the Amplify URL, which stays live.
+`FrontendStack` publishes both, comma-separated, to SSM `/glia-nav/frontend-origin`, because `BackendStack`
 cannot reference the stack that depends on it; the API reads it on first use. Search still goes
 through the rewrite.
 
@@ -346,7 +347,7 @@ is never expire.
 |---|---|
 | No NAT gateway | ~$32/month for outbound internet nothing in the VPC needs. |
 | No VPC connector on App Runner | Would need interface endpoints at ~$7.30/month each to reach the Data API. |
-| CORS for one origin only | Chat must skip the 30 s `/api/*` proxy; nothing else is cross-origin. |
+| CORS for the site's two origins only | Chat must skip the 30 s `/api/*` proxy; nothing else is cross-origin. |
 | App Runner capped at one instance | Uncapped scale-out is the largest budget risk in the account. |
 | Cognito in `BackendStack` | The API verifies the tokens; downstream placement would make the stacks import each other. |
 | Amplify app with no repo attached | A Git-backed Amplify app requires a long-lived GitHub token in the account. |
