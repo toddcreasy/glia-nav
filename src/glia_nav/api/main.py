@@ -39,7 +39,7 @@ class FrontendOriginCORS(CORSMiddleware):
     Search goes through Amplify's /api/* rewrite and stays same-origin. /chat cannot:
     that proxy cuts requests off at 30 s and an agent turn can run longer, so the
     browser calls this service directly. BackendStack cannot reference FrontendStack,
-    so the origin is read on first use, as the runtime ARN is.
+    so the origins are read at request time and re-read every few minutes.
     """
 
     def is_allowed_origin(self, origin: str) -> bool:
@@ -138,13 +138,20 @@ def ssm_client(region: str):
     return boto3.client("ssm", region_name=region)
 
 
-@lru_cache
+# Re-read every few minutes, not once per process: `cdk deploy` ships the new API before
+# FrontendStack rewrites the parameter, so a value cached for good can miss a new origin.
+ORIGINS_TTL_S = 300
+_origins: dict[tuple[str, str], tuple[float, list[str]]] = {}
+
+
 def frontend_origins(region: str, parameter: str) -> list[str]:
-    return (
-        boto3.client("ssm", region_name=region)
-        .get_parameter(Name=parameter)["Parameter"]["Value"]
-        .split(",")
-    )
+    key = (region, parameter)
+    cached = _origins.get(key)
+    if cached and time.monotonic() - cached[0] < ORIGINS_TTL_S:
+        return cached[1]
+    origins = ssm_client(region).get_parameter(Name=parameter)["Parameter"]["Value"].split(",")
+    _origins[key] = (time.monotonic(), origins)
+    return origins
 
 
 # Aurora takes up to a minute to resume, and App Runner cuts a request off at 120 s.

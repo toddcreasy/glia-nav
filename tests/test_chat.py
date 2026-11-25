@@ -197,6 +197,33 @@ def test_chat_preflight_refuses_other_origins(monkeypatch):
     assert "access-control-allow-origin" not in response.headers
 
 
+class FakeSsm:
+    def __init__(self, value):
+        self.value = value
+        self.calls = 0
+
+    def get_parameter(self, Name):
+        self.calls += 1
+        return {"Parameter": {"Value": self.value}}
+
+
+def test_frontend_origins_pick_up_a_changed_parameter(monkeypatch):
+    ssm = FakeSsm("https://main.example.amplifyapp.com")
+    clock = [1000.0]
+    monkeypatch.setattr(main, "ssm_client", lambda region: ssm)
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(main, "_origins", {})
+
+    assert main.frontend_origins("us-east-1", "/p") == ["https://main.example.amplifyapp.com"]
+    ssm.value = ",".join(FRONTENDS)
+    clock[0] += 60
+    assert main.frontend_origins("us-east-1", "/p") == ["https://main.example.amplifyapp.com"]
+    assert ssm.calls == 1
+    clock[0] += main.ORIGINS_TTL_S
+    assert main.frontend_origins("us-east-1", "/p") == FRONTENDS
+    assert ssm.calls == 2
+
+
 def test_reset_is_the_next_midnight_eastern():
     eastern = main.EASTERN
     evening = datetime(2026, 9, 25, 23, 30, tzinfo=eastern)
