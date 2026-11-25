@@ -2,11 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
-// The version and build date (next.config.ts). The date shows in the visitor's own locale and
-// timezone, which only the browser knows; the static pages are built without them, so the date
-// appears once the page runs in the browser.
+// The release version and date (next.config.ts, from package.json). The date shows in the
+// visitor's own locale, which only the browser knows; the static pages are built without it, so
+// the date appears once the page runs in the browser.
 const version = process.env.VERSION ?? "";
-const released = process.env.RELEASED_AT ?? "";
+const released = process.env.RELEASED ?? "";
 const noChange = () => () => {};
 
 // The bold separator between the footer's items.
@@ -17,9 +17,15 @@ export const Dot = () => (
 );
 
 function local() {
-  const when = new Date(released);
+  // A calendar date with no time: read and shown as UTC so no timezone moves it a day.
+  const when = new Date(`${released}T00:00:00Z`);
   if (Number.isNaN(when.getTime())) return "";
-  return when.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  return when.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export default function Released() {
@@ -35,9 +41,7 @@ export default function Released() {
       {date && (
         <>
           <Dot />
-          <time dateTime={released} title={`${released} (UTC)`}>
-            {date}
-          </time>
+          <time dateTime={released}>{date}</time>
         </>
       )}
     </>
