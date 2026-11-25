@@ -1,4 +1,5 @@
 import IndexStats from "./index-stats";
+import Released, { Dot } from "./released";
 
 const REPO = "https://github.com/toddcreasy/glia-nav";
 
@@ -10,8 +11,7 @@ export default function Disclaimer() {
           GliaNav is for research use only. It is not medical advice, and nothing here should be
           used to make treatment decisions. Talk to your care team.
         </p>
-        <p className="flex flex-wrap gap-x-3 gap-y-1">
-          <IndexStats />
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <a
             href={`${REPO}/blob/main/LICENSE`}
             target="_blank"
@@ -20,6 +20,7 @@ export default function Disclaimer() {
           >
             Apache 2.0 license
           </a>
+          <Dot />
           <a
             href={REPO}
             target="_blank"
@@ -28,6 +29,8 @@ export default function Disclaimer() {
           >
             Source on GitHub
           </a>
+          <Released />
+          <IndexStats />
         </p>
       </div>
     </footer>
