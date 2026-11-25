@@ -2,16 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { Dot } from "./released";
+
 type Stats = { trials: number; papers: number; updated_at: string };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
-const UPDATED = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "America/New_York",
-});
 
-// The daily ingest publishes these. Until it has, nothing shows.
+// The corpus counts the daily ingest publishes, read live from /stats. Until it has, nothing shows.
 export default function IndexStats() {
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -24,9 +21,11 @@ export default function IndexStats() {
 
   if (!stats) return null;
   return (
-    <p className="tabular-nums">
-      {stats.trials.toLocaleString()} trials · {stats.papers.toLocaleString()} papers · updated{" "}
-      {UPDATED.format(new Date(stats.updated_at))}
-    </p>
+    <>
+      <Dot />
+      <span className="tabular-nums">{stats.trials.toLocaleString()} trials</span>
+      <Dot />
+      <span className="tabular-nums">{stats.papers.toLocaleString()} papers</span>
+    </>
   );
 }

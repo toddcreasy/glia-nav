@@ -11,7 +11,6 @@ export default function Disclaimer() {
           GliaNav is for research use only. It is not medical advice, and nothing here should be
           used to make treatment decisions. Talk to your care team.
         </p>
-        <IndexStats />
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <a
             href={`${REPO}/blob/main/LICENSE`}
@@ -31,6 +30,7 @@ export default function Disclaimer() {
             Source on GitHub
           </a>
           <Released />
+          <IndexStats />
         </p>
       </div>
     </footer>
