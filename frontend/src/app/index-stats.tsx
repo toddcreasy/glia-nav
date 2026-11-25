@@ -24,9 +24,9 @@ export default function IndexStats() {
 
   if (!stats) return null;
   return (
-    <span className="tabular-nums">
+    <p className="tabular-nums">
       {stats.trials.toLocaleString()} trials · {stats.papers.toLocaleString()} papers · updated{" "}
       {UPDATED.format(new Date(stats.updated_at))}
-    </span>
+    </p>
   );
 }
