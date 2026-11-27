@@ -268,6 +268,12 @@ two have to move together.
 $30/month budget, alerts at 50, 80, and 100 percent, to the maintainer's email via SNS. The address is the `ALERT_EMAIL` GitHub Actions secret, kept
 out of the repo.
 
+Since 2026-11-27 the budget counts only resources tagged `project=glia-nav`. The account also holds
+other projects, and before that it counted all of them. Bedrock calls from local runs and CI evals
+use the untagged system inference profile, so they don't reach this budget; the account-wide
+`account-monthly` budget ($200, in project-template's `ops/budget`) covers them and anything else
+untagged.
+
 The budget tracks **gross usage, not net**. A promotional credit pool offsets every line
 dollar-for-dollar, so net spend reads $0.00 and thresholds under the default `IncludeCredit: true`
 could never fire. Any cost query has to filter `RECORD_TYPE=Usage` for the same reason.

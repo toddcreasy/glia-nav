@@ -815,7 +815,10 @@ runtime's application log group in `AgentStack`. Local runs and CI eval runs nev
 log group, so their spend never reaches the alarm.
 
 Accepted rather than closed, 2026-08-28. AWS Budgets tracks every dollar wherever it was spent,
-local and CI included, so nothing is unmonitored; it is a day late instead of near real time. The
+local and CI included, so nothing is unmonitored; it is a day late instead of near real time.
+Since 2026-11-27 that dollar lands in the account-wide `account-monthly` budget (project-template's
+`ops/budget`), not `glia-nav-monthly`: the glia-nav budget now counts only resources tagged
+`project=glia-nav`, and local and CI Bedrock calls go through the untagged system inference profile. The
 golden set is twelve cases on Haiku and costs cents per run. The failure this alarm exists to catch
 is an unattended runaway loop, which can only happen in the deployed runtime. A runaway loop in CI
 would surface on the budget alarm instead. Emitting metrics from the eval harness was considered
