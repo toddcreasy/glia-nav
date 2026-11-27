@@ -76,6 +76,10 @@ class OpsStack(cdk.Stack):
                 # promotional credit pool covers the account net spend is $0.00,
                 # so the thresholds below could never fire.
                 cost_types=budgets.CfnBudget.CostTypesProperty(include_credit=False),
+                # Only resources tagged project=glia-nav (app.py tags every one). Without a
+                # filter it counted the whole account, which now holds other projects; the
+                # account-wide budget lives in project-template's ops/budget.
+                cost_filters={"TagKeyValue": ["user:project$glia-nav"]},
             ),
             notifications_with_subscribers=[
                 budgets.CfnBudget.NotificationWithSubscribersProperty(
